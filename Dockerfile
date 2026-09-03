@@ -2,40 +2,40 @@
 # Antigravity Web (agy-web) Production Dockerfile
 # ==============================================================================
 
-FROM node:22-alpine AS builder
+FROM node:22-slim AS builder
 
 WORKDIR /app
 
 # Install build dependencies for better-sqlite3 native bindings
-RUN apk add --no-cache python3 make g++
+RUN apt-get update && apt-get install -y python3 make g++ git && rm -rf /var/lib/apt/lists/*
 
-# Copy root workspace and package files
+# Copy package manifests
 COPY package*.json ./
 COPY client/package*.json ./client/
 COPY server/package*.json ./server/
 
-# Install dependencies for all workspaces
+# Install all workspace dependencies
 RUN npm install
 
-# Copy source files
+# Copy sources
 COPY shared ./shared
 COPY client ./client
 COPY server ./server
 
-# Build shared, server, and client
+# Build server and client
 RUN npm run build
 
 # ==============================================================================
-# Production Image
+# Production Runtime Stage
 # ==============================================================================
-FROM node:22-alpine AS runner
+FROM node:22-slim AS runner
 
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=80
 
-# Install runtime dependencies for better-sqlite3
-RUN apk add --no-cache python3 make g++ git bash
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y python3 make g++ git bash curl && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
 COPY client/package*.json ./client/
@@ -44,7 +44,7 @@ COPY server/package*.json ./server/
 # Install production dependencies only
 RUN npm install --omit=dev
 
-# Copy compiled artifacts
+# Copy build artifacts
 COPY --from=builder /app/server/dist ./server/dist
 COPY --from=builder /app/client/dist ./client/dist
 COPY --from=builder /app/shared ./shared
@@ -52,6 +52,6 @@ COPY --from=builder /app/shared ./shared
 EXPOSE 80
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:80/health || exit 1
+  CMD curl -f http://localhost:80/health || exit 1
 
 CMD ["npm", "start"]
