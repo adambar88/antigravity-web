@@ -15,7 +15,7 @@ COPY client/package*.json ./client/
 COPY server/package*.json ./server/
 
 # Install dependencies for all workspaces
-RUN npm ci
+RUN npm install
 
 # Copy source files
 COPY shared ./shared
@@ -42,7 +42,7 @@ COPY client/package*.json ./client/
 COPY server/package*.json ./server/
 
 # Install production dependencies only
-RUN npm ci --omit=dev
+RUN npm install --omit=dev
 
 # Copy compiled artifacts
 COPY --from=builder /app/server/dist ./server/dist
