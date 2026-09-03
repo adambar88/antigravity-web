@@ -1,0 +1,25 @@
+{
+  "name": "antigravity-web",
+  "version": "1.0.0",
+  "description": "Antigravity Web — Autonomous full-stack agent interface",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "scripts": {
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client",
+    "dev": "npx --yes concurrently -k -n server,client -c \"cyan,magenta\" \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
+    "build:server": "npm run build --prefix server",
+    "build:client": "npm run build --prefix client",
+    "build": "npm run build --prefix server && npm run build --prefix client",
+    "seed": "npm run seed --prefix server",
+    "test": "npm test --prefix server",
+    "start": "npm start --prefix server"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

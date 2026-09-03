@@ -1,0 +1,155 @@
+@import "tailwindcss";
+
+@theme {
+  --color-app: var(--bg-app);
+  --color-surface: var(--bg-surface);
+  --color-surface-hover: var(--bg-surface-hover);
+  --color-surface-active: var(--bg-surface-active);
+  --color-card: var(--bg-card);
+  --color-card-muted: var(--bg-card-muted);
+  --color-main: var(--text-main);
+  --color-muted: var(--text-muted);
+  --color-subtle: var(--text-subtle);
+  --color-border: var(--border-subtle);
+  --color-border-strong: var(--border-strong);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-text: var(--primary-text);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-error: var(--error);
+  --color-code: var(--code-bg);
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+:root,
+[data-theme="warm-light"] {
+  --bg: #f0e9df;
+  --surface: #f8f3eb;
+  --text: #231f1a;
+  --bg-app: var(--bg);
+  --bg-surface: var(--surface);
+  --bg-surface-hover: #ede4d6;
+  --bg-surface-active: #e2d6c5;
+  --bg-card: #ffffff;
+  --bg-card-muted: #f4eee5;
+  --text-main: var(--text);
+  --text-muted: #6e6459;
+  --text-subtle: #75685a;
+  --border-subtle: #e4dacf;
+  --border-strong: #cebead;
+  --primary: #7c3aed;
+  --primary-hover: #6d28d9;
+  --primary-soft: #ede9fe;
+  --primary-text: #5b21b6;
+  --success: #15803d;
+  --warning: #b45309;
+  --error: #b91c1c;
+  --code-bg: #eae3d7;
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --text: #f0f6fc;
+  --bg-app: var(--bg);
+  --bg-surface: var(--surface);
+  --bg-surface-hover: #21262d;
+  --bg-surface-active: #30363d;
+  --bg-card: #1c2128;
+  --bg-card-muted: #141922;
+  --text-main: var(--text);
+  --text-muted: #8b949e;
+  --text-subtle: #8d96a0;
+  --border-subtle: #30363d;
+  --border-strong: #444c56;
+  --primary: #a855f7;
+  --primary-hover: #c084fc;
+  --primary-soft: rgba(168, 85, 247, 0.15);
+  --primary-text: #e9d5ff;
+  --success: #3fb950;
+  --warning: #d29922;
+  --error: #f85149;
+  --code-bg: #0a0d12;
+  color-scheme: dark;
+}
+
+/* Base custom styles */
+body {
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: var(--bg-app);
+  color: var(--text-main);
+  min-height: 100vh;
+  min-height: 100dvh;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom smooth scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-subtle);
+}
+
+/* Markdown rendered styling inside chat & artifacts */
+.markdown-content p {
+  margin-bottom: 0.75rem;
+  line-height: 1.625;
+}
+.markdown-content p:last-child {
+  margin-bottom: 0;
+}
+.markdown-content pre {
+  background-color: var(--code-bg);
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  overflow-x: auto;
+  margin: 0.75rem 0;
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.85rem;
+  border: 1px solid var(--border-subtle);
+}
+.markdown-content code:not(pre code) {
+  background-color: var(--code-bg);
+  padding: 0.15rem 0.35rem;
+  border-radius: 0.25rem;
+  font-size: 0.85em;
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+.markdown-content ul, .markdown-content ol {
+  margin-left: 1.25rem;
+  margin-bottom: 0.75rem;
+}
+.markdown-content li {
+  margin-bottom: 0.25rem;
+}
+.markdown-content h1, .markdown-content h2, .markdown-content h3 {
+  font-weight: 600;
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+}
+.markdown-content blockquote {
+  border-left: 3px solid var(--primary);
+  padding-left: 0.75rem;
+  margin: 0.75rem 0;
+  color: var(--text-muted);
+}

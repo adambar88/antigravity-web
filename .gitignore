@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Build outputs
+dist/
+client/dist/
+server/dist/
+
+# SQLite databases & WAL logs
+data/*.sqlite*
+data/*.db*
+server/data/*.sqlite*
+server/data/*.db*
+
+# Environment & credentials
+.env
+.env.*
+*.local
+
+# OS & Editor
+.DS_Store
+*.log
+*.tsbuildinfo
+
+# Test artifacts (keep directory, ignore bulky images)
+test-artifacts/screenshots/
+test_api_matrix.mjs
+test_visual_suite.cjs
+visual_verification_report.json

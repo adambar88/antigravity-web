@@ -1,0 +1,78 @@
+{
+  "name": "Antigravity Web Studio",
+  "short_name": "Antigravity",
+  "description": "Autonomous development studio and reactive AI interface for high-velocity software engineering",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": [
+    "window-controls-overlay",
+    "standalone",
+    "minimal-ui"
+  ],
+  "orientation": "any",
+  "theme_color": "#0d1117",
+  "background_color": "#0d1117",
+  "lang": "en-US",
+  "dir": "ltr",
+  "categories": [
+    "developer-tools",
+    "productivity",
+    "utilities"
+  ],
+  "icons": [
+    {
+      "src": "/icons/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "New Session",
+      "short_name": "New Session",
+      "description": "Start a new autonomous AI coding session",
+      "url": "/?action=new",
+      "icons": [
+        {
+          "src": "/icons/icon-192.svg",
+          "sizes": "192x192",
+          "type": "image/svg+xml"
+        }
+      ]
+    },
+    {
+      "name": "Active Sessions",
+      "short_name": "Sessions",
+      "description": "Browse and resume active dev sessions",
+      "url": "/?view=sessions",
+      "icons": [
+        {
+          "src": "/icons/icon-192.svg",
+          "sizes": "192x192",
+          "type": "image/svg+xml"
+        }
+      ]
+    }
+  ],
+  "prefer_related_applications": false
+}
