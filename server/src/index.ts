@@ -43,11 +43,16 @@ export async function buildServer() {
   // 4. Authentication Guard PreHandler
   server.addHook('preHandler', authGuard);
 
-  // 5. Register REST & SSE Routes
+  // 5. Register REST & SSE Routes (both root and /agy prefix for subpath proxying)
   await server.register(healthRoutes);
   await server.register(authRoutes);
   await server.register(sessionRoutes);
   await server.register(workspaceRoutes);
+
+  await server.register(healthRoutes, { prefix: '/agy' });
+  await server.register(authRoutes, { prefix: '/agy' });
+  await server.register(sessionRoutes, { prefix: '/agy' });
+  await server.register(workspaceRoutes, { prefix: '/agy' });
 
   // 6. Serve static client build if available
   const candidateClientDirs = [
@@ -65,11 +70,18 @@ export async function buildServer() {
       prefix: '/',
       wildcard: false,
     });
+    await server.register(fastifyStatic, {
+      root: clientDist,
+      prefix: '/agy/',
+      decorateReply: false,
+      wildcard: false,
+    });
 
     // SPA fallback: non-API routes fallback to client index.html
     server.setNotFoundHandler((request, reply) => {
       const url = request.raw.url || '';
-      if (!url.startsWith('/api') && !url.startsWith('/health')) {
+      const cleanUrl = url.replace(/^\/agy/, '');
+      if (!cleanUrl.startsWith('/api') && !cleanUrl.startsWith('/health')) {
         const indexPath = path.join(clientDist, 'index.html');
         if (fs.existsSync(indexPath)) {
           return reply.sendFile('index.html');

@@ -52,7 +52,9 @@ export class SessionSSEClient {
     this.cleanup();
 
     try {
-      const url = `/api/sessions/${this.sessionId}/stream`;
+      const base = import.meta.env.BASE_URL || '/';
+      const apiBase = (base.endsWith('/') ? base : `${base}/`) + 'api';
+      const url = `${apiBase}/sessions/${this.sessionId}/stream`;
       this.eventSource = new EventSource(url);
 
       this.eventSource.onopen = () => {

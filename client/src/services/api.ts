@@ -16,7 +16,12 @@ import {
   WorkspaceTreeResponse,
 } from '@/types';
 
-const BASE_URL = '/api';
+const getApiBase = () => {
+  const base = import.meta.env.BASE_URL || '/';
+  return (base.endsWith('/') ? base : `${base}/`) + 'api';
+};
+
+const BASE_URL = getApiBase();
 
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
