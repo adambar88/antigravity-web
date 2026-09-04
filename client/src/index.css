@@ -155,6 +155,16 @@ body {
 }
 
 /* Mermaid SVG Diagram Enhancements & Text Overflow Fixes */
+.mermaid-diagram-container {
+  display: flex;
+  justify-content: center;
+}
+
+.mermaid-diagram-container svg {
+  max-width: 100%;
+  height: auto;
+}
+
 .mermaid-diagram-container foreignObject {
   overflow: visible !important;
 }
@@ -177,5 +187,29 @@ body {
 
 .markdown-content .mermaid-diagram-container p {
   margin-bottom: 0 !important;
+}
+
+.mermaid-diagram-container .cluster rect {
+  rx: 12px !important;
+  ry: 12px !important;
+  stroke-width: 1.5px !important;
+}
+
+.mermaid-diagram-container .node rect,
+.mermaid-diagram-container .node circle,
+.mermaid-diagram-container .node ellipse,
+.mermaid-diagram-container .node polygon {
+  rx: 8px !important;
+  ry: 8px !important;
+}
+
+.mermaid-diagram-container .edgeLabel {
+  background-color: var(--surface, #ffffff) !important;
+  padding: 3px 8px !important;
+  border-radius: 6px !important;
+  border: 1px solid var(--border, #e2e8f0) !important;
+  font-size: 11.5px !important;
+  font-weight: 500 !important;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
 }
 
