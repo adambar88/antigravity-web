@@ -1,7 +1,6 @@
 import React from 'react';
 import {
   Bot,
-  Square,
   User,
 } from 'lucide-react';
 import { Message, ToolExecution } from '@/types';
@@ -21,7 +20,7 @@ interface ChatCanvasProps {
   showScrollBadge: boolean;
   onScroll: () => void;
   onScrollToBottom: () => void;
-  onAbort: () => void;
+  onAbort?: () => void;
   onQuickPrompt?: (text: string) => void;
   onViewDiff?: (filePath: string) => void;
 }
@@ -36,7 +35,6 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
   showScrollBadge,
   onScroll,
   onScrollToBottom,
-  onAbort,
   onQuickPrompt,
   onViewDiff,
 }) => {
@@ -200,20 +198,6 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
 
       {/* Floating Scroll Anchor Badge */}
       <ScrollAnchorBadge show={showScrollBadge} onClick={onScrollToBottom} />
-
-      {/* Floating Stop Button during generation */}
-      {isGenerating && (
-        <div className="absolute top-4 right-6 z-20">
-          <button
-            type="button"
-            onClick={onAbort}
-            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-rose-500 hover:bg-rose-600 text-white text-xs font-semibold shadow-lg transition-all duration-150 cursor-pointer"
-          >
-            <Square className="w-3.5 h-3.5 fill-current" />
-            <span>Zatrzymaj generowanie</span>
-          </button>
-        </div>
-      )}
     </div>
   );
 };
