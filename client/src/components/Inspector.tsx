@@ -1,14 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   FileCode,
   FolderTree,
   Layers,
   Maximize2,
   Minimize2,
+  RefreshCw,
   Sparkles,
   X,
 } from 'lucide-react';
 import { Artifact, FileDiff, InspectorTab } from '@/types';
+import { api } from '@/services/api';
 import { DiffViewer } from './DiffViewer';
 import { FileTreeViewer } from './FileTreeViewer';
 import { ArtifactViewer } from './ArtifactViewer';
@@ -25,6 +27,7 @@ interface InspectorProps {
   onTabChange?: (tab: InspectorTab) => void;
   highlightFilePath?: string | null;
   workspacePath?: string;
+  onDiffsCountChange?: (count: number) => void;
 }
 
 export const Inspector: React.FC<InspectorProps> = ({
@@ -36,12 +39,59 @@ export const Inspector: React.FC<InspectorProps> = ({
   onTabChange,
   highlightFilePath,
   workspacePath,
+  onDiffsCountChange,
 }) => {
   const [currentTab, setCurrentTab] = useState<InspectorTab>(activeTab);
   const [selectedDiffPath, setSelectedDiffPath] = useState<string | null>(null);
+  const [workspaceDiffs, setWorkspaceDiffs] = useState<FileDiff[]>([]);
+  const [isLoadingDiffs, setIsLoadingDiffs] = useState(false);
+  const [diffSource, setDiffSource] = useState<'session' | 'workspace'>('session');
   const [isDesktop, setIsDesktop] = useState(
     typeof window !== 'undefined' ? window.innerWidth >= 768 : true
   );
+
+  const fetchWorkspaceDiffs = useCallback(async () => {
+    setIsLoadingDiffs(true);
+    try {
+      const res = await api.getWorkspaceDiffs(workspacePath);
+      setWorkspaceDiffs(res.diffs || []);
+      if (res.diffs && res.diffs.length > 0 && diffs.length === 0) {
+        setDiffSource('workspace');
+      }
+    } catch (err) {
+      console.warn('Nie udało się pobrać diffów roboczych Git:', err);
+    } finally {
+      setIsLoadingDiffs(false);
+    }
+  }, [workspacePath, diffs.length]);
+
+  // Automatically fetch workspace diffs when Inspector is opened on diffs tab
+  useEffect(() => {
+    if (isOpen && currentTab === 'diffs') {
+      fetchWorkspaceDiffs();
+    }
+  }, [isOpen, currentTab, workspacePath, fetchWorkspaceDiffs]);
+
+  // Keep diffSource in sync
+  useEffect(() => {
+    if (diffs.length > 0) {
+      setDiffSource('session');
+    } else if (workspaceDiffs.length > 0) {
+      setDiffSource('workspace');
+    }
+  }, [diffs.length, workspaceDiffs.length]);
+
+  // Determine active displayed diffs
+  const activeDiffs =
+    diffs.length > 0 && diffSource === 'session'
+      ? diffs
+      : workspaceDiffs.length > 0
+      ? workspaceDiffs
+      : diffs;
+
+  useEffect(() => {
+    onDiffsCountChange?.(activeDiffs.length);
+  }, [activeDiffs.length, onDiffsCountChange]);
 
   useEffect(() => {
     const handleResize = () => setIsDesktop(window.innerWidth >= 768);
@@ -116,8 +166,8 @@ export const Inspector: React.FC<InspectorProps> = ({
 
   if (!isOpen) return null;
 
-  const totalAdditions = diffs.reduce((acc, d) => acc + d.additions, 0);
-  const totalDeletions = diffs.reduce((acc, d) => acc + d.deletions, 0);
+  const totalAdditions = activeDiffs.reduce((acc, d) => acc + d.additions, 0);
+  const totalDeletions = activeDiffs.reduce((acc, d) => acc + d.deletions, 0);
 
   return (
     <aside
@@ -168,9 +218,9 @@ export const Inspector: React.FC<InspectorProps> = ({
           >
             <FileCode className="w-3.5 h-3.5" />
             <span>Zmiany</span>
-            {diffs.length > 0 && (
+            {activeDiffs.length > 0 && (
               <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-primary/20 text-primary font-mono">
-                {diffs.length}
+                {activeDiffs.length}
               </span>
             )}
           </button>
@@ -231,28 +281,76 @@ export const Inspector: React.FC<InspectorProps> = ({
       <div className="flex-1 min-h-0 overflow-y-auto">
         {currentTab === 'diffs' && (
           <div className="h-full flex flex-col p-3 space-y-3">
-            {diffs.length === 0 ? (
+            {activeDiffs.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full p-8 text-center text-subtle">
                 <Sparkles className="w-8 h-8 mb-2 opacity-40 text-primary" />
                 <h4 className="text-sm font-semibold text-main mb-1">Brak zmian w projekcie</h4>
-                <p className="text-xs max-w-xs">
-                  W tym zadaniu asystent nie modyfikował jeszcze żadnych plików. Poproś o wprowadzenie modyfikacji w kodzie.
+                <p className="text-xs max-w-xs mb-3">
+                  W tym zadaniu asystent nie modyfikował jeszcze żadnych plików, a drzewo robocze Git jest czyste.
                 </p>
+                <button
+                  type="button"
+                  onClick={fetchWorkspaceDiffs}
+                  disabled={isLoadingDiffs}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-surface-hover hover:bg-border text-main border border-border transition-colors cursor-pointer"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isLoadingDiffs ? 'animate-spin text-primary' : ''}`} />
+                  <span>Odśwież stan Git</span>
+                </button>
               </div>
             ) : (
               <>
-                <div className="flex items-center justify-between px-2 py-1 bg-surface-hover/50 rounded-xl border border-border text-xs">
-                  <span className="text-muted font-medium">Łącznie zmodyfikowano: {diffs.length} plików</span>
-                  <div className="flex items-center gap-1.5 font-mono">
+                <div className="flex items-center justify-between px-2.5 py-1.5 bg-surface-hover/50 rounded-xl border border-border text-xs">
+                  <div className="flex items-center gap-2">
+                    {diffs.length > 0 && workspaceDiffs.length > 0 ? (
+                      <div className="inline-flex rounded-lg border border-border bg-card p-0.5 text-[11px]">
+                        <button
+                          type="button"
+                          onClick={() => setDiffSource('session')}
+                          className={`px-2 py-0.5 rounded-md font-medium transition-colors cursor-pointer ${
+                            diffSource === 'session' ? 'bg-primary text-white font-semibold' : 'text-muted hover:text-main'
+                          }`}
+                        >
+                          Sesja ({diffs.length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDiffSource('workspace')}
+                          className={`px-2 py-0.5 rounded-md font-medium transition-colors cursor-pointer ${
+                            diffSource === 'workspace' ? 'bg-primary text-white font-semibold' : 'text-muted hover:text-main'
+                          }`}
+                        >
+                          Git ({workspaceDiffs.length})
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-muted font-medium">
+                        {diffs.length > 0 && diffSource === 'session'
+                          ? `Zmiany w sesji: ${diffs.length} ${diffs.length === 1 ? 'plik' : 'plików'}`
+                          : `Zmiany robocze Git: ${activeDiffs.length} ${activeDiffs.length === 1 ? 'plik' : 'plików'}`}
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={fetchWorkspaceDiffs}
+                      disabled={isLoadingDiffs}
+                      title="Odśwież stan zmian Git"
+                      className="p-1 rounded-md text-subtle hover:text-main hover:bg-surface transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isLoadingDiffs ? 'animate-spin text-primary' : ''}`} />
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 font-mono text-[11px]">
                     <span className="text-emerald-600 font-semibold">+{totalAdditions}</span>
                     <span className="text-rose-600 font-semibold">-{totalDeletions}</span>
                   </div>
                 </div>
 
                 <div className="space-y-3">
-                  {diffs.map((diff) => (
+                  {activeDiffs.map((diff) => (
                     <div
-                      key={diff.id}
+                      key={diff.id || diff.file_path}
                       className={selectedDiffPath === diff.file_path ? 'ring-2 ring-primary rounded-2xl' : ''}
                     >
                       <DiffViewer diff={diff} />

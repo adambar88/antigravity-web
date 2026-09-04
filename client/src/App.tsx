@@ -61,17 +61,21 @@ export default function App() {
   const [mobileTab, setMobileTab] = useState<ActiveTab>('chat');
   const [highlightDiffPath, setHighlightDiffPath] = useState<string | null>(null);
   const [isNewSessionModalOpen, setIsNewSessionModalOpen] = useState(false);
+  const [activeDiffsCount, setActiveDiffsCount] = useState(0);
 
   // Toasts
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
   const addToast = useCallback(
-    (type: 'info' | 'success' | 'warning' | 'error', message: string) => {
-      const id = `toast-${Date.now()}`;
-      setToasts((prev) => [...prev, { id, type, message }]);
-      setTimeout(() => {
-        setToasts((prev) => prev.filter((t) => t.id !== id));
-      }, 3000);
+    (
+      type: 'info' | 'success' | 'warning' | 'error',
+      message: string,
+      action?: { label: string; onClick: () => void },
+      duration?: number
+    ) => {
+      const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      // Keep at most 3 active toasts in queue to prevent clutter
+      setToasts((prev) => [...prev.slice(-2), { id, type, message, action, duration }]);
     },
     []
   );
@@ -228,6 +232,7 @@ export default function App() {
             onTabChange={(tab) => setInspectorTab(tab)}
             highlightFilePath={highlightDiffPath}
             workspacePath={activeWorkspacePath}
+            onDiffsCountChange={(count) => setActiveDiffsCount(count)}
           />
         </div>
 
@@ -235,7 +240,7 @@ export default function App() {
         <MobileNavigation
           activeTab={mobileTab}
           onTabSelect={handleMobileTabSelect}
-          diffsCount={diffs.length}
+          diffsCount={activeDiffsCount || diffs.length}
         />
       </div>
 

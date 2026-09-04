@@ -3,6 +3,7 @@
  */
 
 import {
+  FileDiff,
   AuthMeResponse,
   CreateSessionRequest,
   HealthResponse,
@@ -157,5 +158,17 @@ export const api = {
     if (root) params.set('root', root);
     if (download) params.set('download', '1');
     return `${BASE_URL}/workspace/raw?${params.toString()}`;
+  },
+
+  async getWorkspaceDiffs(root?: string): Promise<{
+    root: string;
+    diffs: FileDiff[];
+  }> {
+    const params = root ? `?root=${encodeURIComponent(root)}` : '';
+    const res = await fetch(`${BASE_URL}/workspace/diffs${params}`);
+    return handleResponse<{
+      root: string;
+      diffs: FileDiff[];
+    }>(res);
   },
 };

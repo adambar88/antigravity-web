@@ -13,6 +13,7 @@ import {
   Gauge,
   HelpCircle,
   ListTodo,
+  LogOut,
   Sparkles,
   Square,
   Target,
@@ -134,6 +135,12 @@ const SLASH_COMMANDS: SlashCommand[] = [
     label: 'Pomoc Antigravity CLI',
     description: 'Pełna lista poleceń slash i przewodnik',
     icon: HelpCircle,
+  },
+  {
+    command: '/logout',
+    label: 'Wyloguj / zmień konto',
+    description: 'Zarządzaj kontem Google i zmień profil logowania',
+    icon: LogOut,
   },
   {
     command: '/clear',

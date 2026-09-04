@@ -8,4 +8,9 @@ export interface ToastMessage {
   id: string;
   type: 'info' | 'success' | 'warning' | 'error';
   message: string;
+  action?: {
+    label: string;
+    onClick: () => void;
+  };
+  duration?: number;
 }

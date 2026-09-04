@@ -2,16 +2,17 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { FastifyPluginAsync } from 'fastify';
 import {
-  getWorkspaceTree,
+  WorkspaceSecurityError,
+  getDefaultWorkspaceRoot,
+  getFileCategoryAndMime,
   getWorkspaceDirectoryChildren,
+  getWorkspaceTree,
+  listWorkspaceDirectories,
   readWorkspaceFile,
   resolveWorkspacePath,
-  getFileCategoryAndMime,
-  getDefaultWorkspaceRoot,
-  listWorkspaceDirectories,
-  WorkspaceSecurityError,
 } from '../security/workspaceGuard.js';
-import type { WorkspaceTreeResponse, WorkspaceFileResponse } from '../types/contract.js';
+import { collectWorkspaceGitDiffs } from '../agent/slashCommands.js';
+import type { WorkspaceFileResponse, WorkspaceTreeResponse } from '../types/contract.js';
 
 export const workspaceRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /api/workspace/directories
@@ -178,6 +179,25 @@ export const workspaceRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(500).send({
         error: 'Internal Server Error',
         message: err.message || 'Failed to stream workspace file',
+      });
+    }
+  });
+
+  // GET /api/workspace/diffs (retrieve live working-tree git diffs including submodules)
+  fastify.get<{
+    Querystring: { root?: string };
+  }>('/api/workspace/diffs', async (req, reply) => {
+    const root = req.query.root || getDefaultWorkspaceRoot();
+    try {
+      const diffs = collectWorkspaceGitDiffs(root);
+      return reply.status(200).send({
+        root,
+        diffs,
+      });
+    } catch (err: any) {
+      return reply.status(500).send({
+        error: 'Internal Server Error',
+        message: err.message || 'Failed to inspect workspace diffs',
       });
     }
   });

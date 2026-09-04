@@ -1,6 +1,7 @@
 import { execSync } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import {
   getSession,
   updateSession,
@@ -14,6 +15,9 @@ import type {
   Session,
   SlashCommandResultPayload,
   MessageCompletePayload,
+  FileDiff,
+  ToolExecution,
+  DiffCreatedPayload,
 } from '../types/contract.js';
 
 export const SUPPORTED_MODELS = [
@@ -53,6 +57,112 @@ function safeExec(cmd: string, cwd: string, timeoutMs = 8000): string {
     }
     return err.stderr ? err.stderr.trim() : err.message || 'Polecenie zakończone błędem';
   }
+}
+
+/**
+ * Recursively collects git diffs from the workspace and any modified submodules.
+ */
+export function collectWorkspaceGitDiffs(root: string): FileDiff[] {
+  const diffs: FileDiff[] = [];
+  try {
+    const statusOut = execSync('git status --porcelain', {
+      cwd: root,
+      encoding: 'utf-8',
+      timeout: 5000,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    const lines = statusOut.split('\n').filter(Boolean);
+
+    for (const line of lines) {
+      const status = line.slice(0, 2);
+      const relPath = line.slice(3).trim();
+      const fullPath = path.join(root, relPath);
+
+      // Recursively check submodules
+      if (fs.existsSync(fullPath) && (fs.existsSync(path.join(fullPath, '.git')) || fs.existsSync(path.join(fullPath, '.gitmodules')))) {
+        try {
+          const subDiffs = collectWorkspaceGitDiffs(fullPath).map((d) => ({
+            ...d,
+            file_path: path.join(relPath, d.file_path),
+          }));
+          diffs.push(...subDiffs);
+        } catch {}
+        continue;
+      }
+
+      // Ignore binary extensions or very large files (> 500KB)
+      const ext = path.extname(relPath).toLowerCase();
+      if (['.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico', '.pdf', '.zip', '.tar', '.gz', '.db', '.sqlite', '.sqlite3', '.woff', '.woff2', '.ttf', '.mp3', '.mp4'].includes(ext)) {
+        continue;
+      }
+      if (fs.existsSync(fullPath)) {
+        try {
+          const stat = fs.statSync(fullPath);
+          if (stat.size > 500 * 1024) continue;
+        } catch {}
+      }
+
+      let beforeContent = '';
+      let afterContent = '';
+
+      try {
+        beforeContent = execSync(`git show HEAD:"${relPath}"`, {
+          cwd: root,
+          encoding: 'utf-8',
+          timeout: 4000,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+      } catch {
+        beforeContent = '';
+      }
+
+      try {
+        if (fs.existsSync(fullPath)) {
+          afterContent = fs.readFileSync(fullPath, 'utf-8');
+        } else {
+          afterContent = '';
+        }
+      } catch {
+        afterContent = '';
+      }
+
+      let additions = 0;
+      let deletions = 0;
+      try {
+        const numstat = execSync(`git diff --numstat HEAD -- "${relPath}"`, {
+          cwd: root,
+          encoding: 'utf-8',
+          timeout: 3000,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        }).trim();
+        if (numstat) {
+          const [addStr, delStr] = numstat.split(/\s+/);
+          additions = parseInt(addStr, 10) || 0;
+          deletions = parseInt(delStr, 10) || 0;
+        }
+      } catch {}
+
+      if (beforeContent === afterContent && additions === 0 && deletions === 0) {
+        continue;
+      }
+
+      diffs.push({
+        id: `diff-${crypto.randomUUID()}`,
+        tool_execution_id: '',
+        session_id: '',
+        file_path: relPath,
+        before_content: beforeContent,
+        after_content: afterContent,
+        additions,
+        deletions,
+        status: status.includes('A') || status.includes('?') ? 'staged' : 'applied',
+        created_at: Date.now(),
+      });
+    }
+  } catch {
+    // Non-fatal if git is unavailable
+  }
+  return diffs;
 }
 
 /**
@@ -287,6 +397,7 @@ export async function processSlashCommand(
   // SYSTEM & INFORMATIONAL COMMANDS (Intercepted with immediate responses)
   // ==========================================================================
   let output = '';
+  let createdToolExecutions: ToolExecution[] | undefined = undefined;
 
   switch (command) {
     case 'help': {
@@ -455,27 +566,49 @@ export async function processSlashCommand(
 
     case 'diff':
     case 'review': {
+      const gitDiffs = collectWorkspaceGitDiffs(workspacePath);
       const gitStatus = safeExec('git status --short', workspacePath);
       const gitStat = safeExec('git diff --stat', workspacePath);
 
-      if (!gitStatus && !gitStat) {
+      if (gitDiffs.length === 0 && !gitStatus && !gitStat) {
         output = 'Katalog roboczy jest czysty (`working tree clean`). Brak zmodyfikowanych ani nieśledzonych plików w repozytorium Git.';
       } else {
+        const fileLines = gitDiffs.slice(0, 20).map((d) => `- \`${d.file_path}\` (+${d.additions}, -${d.deletions})`).join('\n');
         output = [
           '### 📝 Zmiany w kodzie (Git Diff & Status)',
           '',
-          '#### Zmodyfikowane pliki (`git status -s`):',
-          '```bash',
-          gitStatus || '(brak niezatwierdzonych zmian statusu)',
-          '```',
+          `Wykryto **${gitDiffs.length}** zmodyfikowanych plików w projekcie:`,
+          fileLines || '(brak bezpośrednich plików tekstowych)',
+          gitDiffs.length > 20 ? `\n*...oraz ${gitDiffs.length - 20} kolejnych plików*` : '',
           '',
           '#### Statystyka zmian (`git diff --stat`):',
           '```bash',
-          gitStat || '(brak zmian w śledzonych plikach)',
+          gitStat || gitStatus || '(brak zmian)',
           '```',
           '',
-          '💡 *Aby przejrzeć dokładne linie zmian, przejdź do widoku pliku lub zakładki Inspektora.*',
-        ].join('\n');
+          '💡 *Wszystkie szczegółowe linie zmian (diff inline/split) zostały załadowane do prawej zakładki **Zmiany** w Inspektorze.*',
+        ].filter(Boolean).join('\n');
+
+        if (gitDiffs.length > 0) {
+          const toolExecId = `tool-review-${Date.now()}`;
+          createdToolExecutions = [
+            {
+              id: toolExecId,
+              message_id: '',
+              session_id: sessionId,
+              tool_name: 'git_review',
+              tool_args: { command: `/${command}` },
+              tool_result: output,
+              status: 'completed',
+              created_at: Date.now(),
+              diffs: gitDiffs.map((d) => ({
+                ...d,
+                tool_execution_id: toolExecId,
+                session_id: sessionId,
+              })),
+            },
+          ];
+        }
       }
       break;
     }
@@ -681,6 +814,63 @@ export async function processSlashCommand(
       break;
     }
 
+    case 'logout':
+    case 'login':
+    case 'auth': {
+      const tokenPath = path.join(process.env.HOME || '/home/adam', '.gemini/antigravity-cli/antigravity-oauth-token');
+      const isTokenPresent = fs.existsSync(tokenPath);
+
+      if (command === 'logout' && arg.toLowerCase() === 'confirm') {
+        try {
+          if (isTokenPresent) {
+            const backupPath = `${tokenPath}.bak-${Date.now()}`;
+            fs.renameSync(tokenPath, backupPath);
+            output = [
+              '### 🚪 Pomyślnie wylogowano z konta Google',
+              '',
+              'Dotychczasowy token został zarchiwizowany. Aby zalogować się na **nowe konto Google**:',
+              '1. W terminalu uruchom polecenie: `agy`',
+              '2. W konsoli pojawi się link autoryzacyjny Google OAuth.',
+              '3. Otwórz go w przeglądarce, wybierz nowe konto Google i zatwierdź uprawnienia.',
+              '4. Nowy token natychmiast zacznie działać także w tej aplikacji webowej!',
+            ].join('\n');
+          } else {
+            output = 'Brak aktywnego pliku tokenu (`antigravity-oauth-token`). Sesja jest już wylogowana.';
+          }
+        } catch (err: any) {
+          output = `Błąd podczas wylogowywania: ${err.message}`;
+        }
+      } else {
+        output = [
+          '### 🔐 Zarządzanie Kontem i Logowaniem (Google Antigravity)',
+          '',
+          isTokenPresent
+            ? '✅ **Aktualny stan**: Jesteś zalogowany (plik sesji: `~/.gemini/antigravity-cli/antigravity-oauth-token`).'
+            : '⚠️ **Aktualny stan**: Brak aktywnego tokenu sesji.',
+          '',
+          '#### Jak zmienić konto lub wylogować się:',
+          '1. **Przelogowanie przez terminal (Zalecane):**',
+          '   - Otwórz terminal na serwerze/komputerze i uruchom polecenie `agy`',
+          '   - Wpisz `/logout` w sesji CLI.',
+          '   - Przy kolejnym wpisaniu promptu CLI poprosi o zalogowanie — kliknij link w przeglądarce i zaloguj się na **nowe konto Google**.',
+          '',
+          '2. **Szybkie wylogowanie z poziomu wiersza poleceń Bash:**',
+          '   ```bash',
+          '   rm ~/.gemini/antigravity-cli/antigravity-oauth-token',
+          '   agy',
+          '   ```',
+          '',
+          '3. **Wylogowanie bezpośrednio z tego czatu:**',
+          '   - Wpisz `/logout confirm` — aplikacja bezpiecznie przeniesie token sesji do kopii zapasowej.',
+          '',
+          '4. **Alternatywa: Użycie własnego klucza Gemini API (bez czekania na reset limitu):**',
+          '   - Jeśli osiągnąłeś limit zapytań (*quota reached*), możesz wygenerować bezpłatny klucz API na Google AI Studio (`aistudio.google.com`).',
+          '   - Ustaw zmienną środowiskową: `export GEMINI_API_KEY="twoj-klucz"`.',
+        ].join('\n');
+      }
+      break;
+    }
+
     case 'clear': {
       updateSessionStatus(sessionId, 'idle');
       output = 'Stan sesji został zresetowany do stanu spoczynku (`idle`).';
@@ -704,7 +894,28 @@ export async function processSlashCommand(
     role: 'assistant',
     content: output,
     status: 'completed',
+    tool_executions: createdToolExecutions,
   });
+
+  // Broadcast diff_created SSE events for every detected diff
+  if (createdToolExecutions) {
+    for (const tool of createdToolExecutions) {
+      if (tool.diffs) {
+        for (const diff of tool.diffs) {
+          const diffPayload: DiffCreatedPayload = {
+            diff_id: diff.id,
+            tool_execution_id: tool.id,
+            file_path: diff.file_path,
+            before_content: diff.before_content || '',
+            after_content: diff.after_content || '',
+            additions: diff.additions,
+            deletions: diff.deletions,
+          };
+          sessionEventHub.broadcast(sessionId, 'diff_created', diffPayload);
+        }
+      }
+    }
+  }
 
   // Broadcast slash_command_result SSE
   const payload: SlashCommandResultPayload = {
