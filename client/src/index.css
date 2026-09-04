@@ -153,3 +153,29 @@ body {
   margin: 0.75rem 0;
   color: var(--text-muted);
 }
+
+/* Mermaid SVG Diagram Enhancements & Text Overflow Fixes */
+.mermaid-diagram-container foreignObject {
+  overflow: visible !important;
+}
+
+.mermaid-diagram-container foreignObject div {
+  overflow: visible !important;
+}
+
+.mermaid-diagram-container foreignObject p,
+.mermaid-diagram-container foreignObject span,
+.mermaid-diagram-container .nodeLabel,
+.mermaid-diagram-container .nodeLabel p {
+  margin: 0 !important;
+  padding: 0 !important;
+  line-height: 1.35 !important;
+  white-space: normal !important;
+  word-break: break-word !important;
+  overflow-wrap: break-word !important;
+}
+
+.markdown-content .mermaid-diagram-container p {
+  margin-bottom: 0 !important;
+}
+

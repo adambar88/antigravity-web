@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useCallback, useId } from 'react';
 import {
   AlertCircle,
   Check,
+  ChevronsUpDown,
   Code2,
   Copy,
   Download,
@@ -27,6 +28,17 @@ interface MermaidDiagramProps {
   chart: string;
   className?: string;
   title?: string;
+}
+
+/**
+ * Sanitizes Mermaid chart definitions to prevent syntax collisions,
+ * particularly unquoted ampersands inside node label shapes: [...], (...), {...}.
+ */
+export function sanitizeMermaidChart(code: string): string {
+  if (!code) return '';
+  return code.replace(/(\[[^\]\n]+\]|\([^\)\n]+\)|\{[^\}\n]+\})/g, (match) => {
+    return match.replace(/&(?!(?:amp|lt|gt|quot|#\d+|#x[0-9a-fA-F]+);)/g, '#38;');
+  });
 }
 
 export function isMermaidCode(text: string, lang?: string): boolean {
@@ -69,6 +81,7 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
   const [viewMode, setViewMode] = useState<'diagram' | 'code'>('diagram');
   const [zoom, setZoom] = useState<number>(1);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const [isAutoHeight, setIsAutoHeight] = useState<boolean>(false);
 
   const diagramType = title || detectDiagramType(chart);
 
@@ -77,12 +90,29 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
     const mermaid = await getMermaid();
     const isDark = document.documentElement.getAttribute('data-theme') !== 'warm-light';
 
+    if (typeof document !== 'undefined' && 'fonts' in document) {
+      try {
+        await document.fonts.ready;
+      } catch {
+        // Font readiness check failure is non-fatal
+      }
+    }
+
     mermaid.initialize({
       startOnLoad: false,
       securityLevel: 'loose',
       suppressErrorRendering: true,
       fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
+      fontSize: 14,
       theme: 'base',
+      flowchart: {
+        htmlLabels: true,
+        useMaxWidth: false,
+        curve: 'basis',
+        padding: 15,
+        nodeSpacing: 45,
+        rankSpacing: 45,
+      },
       themeVariables: isDark
         ? {
             darkMode: true,
@@ -133,12 +163,14 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
       await configureMermaid();
       const mermaid = await getMermaid();
 
+      const sanitizedChart = sanitizeMermaidChart(chart);
+
       // Validate syntax first
-      await mermaid.parse(chart);
+      await mermaid.parse(sanitizedChart);
 
       // Generate a new unique ID for each render pass to prevent DOM collisions
       const elementId = `mmd-${Math.random().toString(36).slice(2, 9)}`;
-      const { svg } = await mermaid.render(elementId, chart);
+      const { svg } = await mermaid.render(elementId, sanitizedChart);
 
       setSvgContent(svg);
       setError(null);
@@ -333,6 +365,20 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
             </button>
           </div>
 
+          {/* Toggle Full Height */}
+          <button
+            type="button"
+            onClick={() => setIsAutoHeight(!isAutoHeight)}
+            className={`p-1.5 rounded-lg border text-muted hover:text-main transition-colors ${
+              isAutoHeight
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'border-border bg-surface hover:bg-surface-hover'
+            }`}
+            title={isAutoHeight ? 'Ogranicz wysokość diagramu' : 'Rozwiń pełną wysokość diagramu (bez ucinania)'}
+          >
+            <ChevronsUpDown className="w-3.5 h-3.5" />
+          </button>
+
           {/* Fullscreen Expansion */}
           <button
             type="button"
@@ -352,8 +398,8 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
       {/* Main Content Area */}
       <div
         ref={containerRef}
-        className={`relative overflow-auto p-4 sm:p-6 transition-all ${
-          isFullscreen ? 'flex-1 max-h-none' : 'max-h-[600px] min-h-[140px]'
+        className={`mermaid-diagram-container relative overflow-auto p-4 sm:p-6 transition-all ${
+          isFullscreen ? 'flex-1 max-h-none' : isAutoHeight ? 'max-h-none' : 'max-h-[850px] min-h-[140px]'
         }`}
       >
         {/* Loading State */}

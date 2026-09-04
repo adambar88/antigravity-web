@@ -359,7 +359,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
   };
 
   return (
-    <div className="relative w-full max-w-4xl mx-auto px-3 sm:px-4 pb-3">
+    <div className="relative w-full max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto px-3 sm:px-4 pb-3">
       {/* Slash command popover */}
       {showSlashMenu && filteredSlashCommands.length > 0 && (
         <div className="absolute bottom-full mb-2 left-3 sm:left-4 w-80 max-w-[calc(100vw-24px)] bg-surface border border-border rounded-2xl shadow-xl overflow-hidden z-30 transition-all">

@@ -92,8 +92,8 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
             {messages.map((msg) => {
               if (msg.role === 'user') {
                 return (
-                  <div key={msg.id} className="flex items-start gap-3 max-w-3xl ml-auto justify-end">
-                    <div className="p-4 rounded-2xl bg-card border border-border text-main shadow-xs max-w-2xl break-words">
+                  <div key={msg.id} className="flex items-start gap-3 w-full max-w-4xl xl:max-w-5xl 2xl:max-w-6xl ml-auto justify-end">
+                    <div className="p-4 rounded-2xl bg-card border border-border text-main shadow-xs max-w-2xl xl:max-w-3xl break-words">
                       <MarkdownRenderer content={msg.content} />
                     </div>
                     <div className="w-8 h-8 rounded-xl bg-surface border border-border flex items-center justify-center text-muted shrink-0 mt-0.5">
@@ -105,7 +105,7 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
 
               if (msg.role === 'system') {
                 return (
-                  <div key={msg.id} className="max-w-3xl mx-auto my-2 p-3 rounded-xl bg-surface border border-border/70 text-xs text-muted">
+                  <div key={msg.id} className="w-full max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto my-2 p-3 rounded-xl bg-surface border border-border/70 text-xs text-muted">
                     <MarkdownRenderer content={msg.content} />
                   </div>
                 );
@@ -113,7 +113,7 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
 
               // Assistant message
               return (
-                <div key={msg.id} className="flex items-start gap-3 max-w-3xl mr-auto justify-start">
+                <div key={msg.id} className="flex items-start gap-3 w-full max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mr-auto justify-start">
                   <div className="w-8 h-8 rounded-xl bg-primary/15 border border-primary/30 flex items-center justify-center text-primary shrink-0 mt-0.5 shadow-2xs">
                     <Bot className="w-4 h-4" />
                   </div>
@@ -154,7 +154,7 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
 
             {/* Live Streaming Block */}
             {isGenerating && (
-              <div className="flex items-start gap-3 max-w-3xl mr-auto justify-start">
+              <div className="flex items-start gap-3 w-full max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mr-auto justify-start">
                 <div className="w-8 h-8 rounded-xl bg-primary/15 border border-primary/30 flex items-center justify-center text-primary shrink-0 mt-0.5 shadow-2xs">
                   <Bot className="w-4 h-4 animate-pulse" />
                 </div>
