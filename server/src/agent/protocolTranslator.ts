@@ -16,6 +16,7 @@ import {
   handleToolArtifact,
   syncBrainDirArtifacts,
 } from './artifactSync.js';
+import { processSlashCommand } from './slashCommands.js';
 import type {
   SSEEventType,
   SSEEventEnvelope,
@@ -77,22 +78,9 @@ export const sessionEventHub = new SessionEventHub();
 // Slash Command Interception
 // ============================================================================
 
-const AVAILABLE_MODELS = [
-  'gemini-3.8-flash-high',
-  'gemini-3.8-flash-medium',
-  'gemini-3.8-flash-low',
-  'gemini-3.7-flash-high',
-  'gemini-3.7-flash-medium',
-  'gemini-3.7-flash-low',
-  'gemini-3.6-flash-high',
-  'gemini-3.6-flash-medium',
-  'claude-sonnet-4-6',
-  'claude-opus-4-6-thinking',
-  'gpt-oss-120b-medium',
-];
-
 export interface SlashCommandResult {
   intercepted: boolean;
+  transformedPrompt?: string;
   output?: string;
 }
 
@@ -100,125 +88,12 @@ export async function handleSlashCommand(
   sessionId: string,
   prompt: string
 ): Promise<SlashCommandResult> {
-  const trimmed = prompt.trim();
-  if (!trimmed.startsWith('/')) {
-    return { intercepted: false };
-  }
-
-  const parts = trimmed.slice(1).split(/\s+/);
-  const command = parts[0].toLowerCase();
-  const arg = parts.slice(1).join(' ').trim();
-
-  const session = getSession(sessionId);
-  if (!session) {
-    return { intercepted: true, output: `Session not found: ${sessionId}` };
-  }
-
-  let output = '';
-
-  switch (command) {
-    case 'help': {
-      output = [
-        '### Available Slash Commands',
-        '- `/model [name]` — View or switch the session model',
-        '- `/models` — List all available models supported by the agent',
-        '- `/effort [low|medium|high]` — View or adjust reasoning effort',
-        '- `/status` — View current session telemetry and configuration',
-        '- `/clear` — Reset session execution state',
-        '- `/help` — Show this command reference',
-      ].join('\n');
-      break;
-    }
-
-    case 'models': {
-      output = [
-        '### Available Models',
-        ...AVAILABLE_MODELS.map((m) =>
-          m === session.model ? `- **${m}** (current)` : `- ${m}`
-        ),
-      ].join('\n');
-      break;
-    }
-
-    case 'model': {
-      if (!arg) {
-        output = `Current model: **${session.model}** (effort: **${session.effort}**)`;
-      } else {
-        const matching = AVAILABLE_MODELS.find(
-          (m) => m.toLowerCase() === arg.toLowerCase()
-        ) || arg;
-        updateSession(sessionId, { model: matching });
-        output = `Switched session model to **${matching}**`;
-      }
-      break;
-    }
-
-    case 'effort': {
-      if (!arg) {
-        output = `Current reasoning effort: **${session.effort}**`;
-      } else if (['low', 'medium', 'high'].includes(arg.toLowerCase())) {
-        const effort = arg.toLowerCase() as ReasoningEffort;
-        updateSession(sessionId, { effort });
-        output = `Updated reasoning effort to **${effort}**`;
-      } else {
-        output = `Invalid effort level: "${arg}". Use 'low', 'medium', or 'high'.`;
-      }
-      break;
-    }
-
-    case 'status': {
-      output = [
-        '### Session Status',
-        `- **ID**: \`${session.id}\``,
-        `- **Title**: ${session.title}`,
-        `- **Model**: ${session.model}`,
-        `- **Effort**: ${session.effort}`,
-        `- **Status**: ${session.status}`,
-        `- **Workspace**: \`${session.workspace_path}\``,
-      ].join('\n');
-      break;
-    }
-
-    case 'clear': {
-      updateSessionStatus(sessionId, 'idle');
-      output = 'Session execution state reset to idle.';
-      break;
-    }
-
-    default:
-      // Pass other or unknown slash commands to CLI or return help hint
-      return { intercepted: false };
-  }
-
-  // Record user turn
-  appendTurn(sessionId, {
-    role: 'user',
-    content: prompt,
-    status: 'completed',
-  });
-
-  // Record assistant turn
-  const assistantMsg = appendTurn(sessionId, {
-    role: 'assistant',
-    content: output,
-    status: 'completed',
-  });
-
-  // Broadcast slash_command_result
-  const payload: SlashCommandResultPayload = {
-    command: `/${command}`,
-    output,
+  const result = await processSlashCommand(sessionId, prompt);
+  return {
+    intercepted: result.intercepted,
+    transformedPrompt: result.transformedPrompt,
+    output: result.output,
   };
-  sessionEventHub.broadcast(sessionId, 'slash_command_result', payload);
-
-  // Broadcast message_complete
-  const msgCompletePayload: MessageCompletePayload = {
-    message_id: assistantMsg.id,
-    content: output,
-  };
-  sessionEventHub.broadcast(sessionId, 'message_complete', msgCompletePayload);
-
-  return { intercepted: true, output };
 }
 
 // ============================================================================
@@ -233,12 +108,15 @@ export interface RunAgentTurnOptions {
 }
 
 export async function runAgentTurn(options: RunAgentTurnOptions): Promise<void> {
-  const { sessionId, prompt } = options;
+  let { sessionId, prompt } = options;
 
   // 1. Check for read-only slash command interception
   const slashResult = await handleSlashCommand(sessionId, prompt);
   if (slashResult.intercepted) {
     return;
+  }
+  if (slashResult.transformedPrompt) {
+    prompt = slashResult.transformedPrompt;
   }
 
   const session = getSession(sessionId);

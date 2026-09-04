@@ -1,14 +1,25 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  Activity,
   ArrowUp,
+  BookOpen,
   Brain,
   CheckCircle2,
   ChevronDown,
+  Clock,
+  Cpu,
   FileSearch,
+  FolderKanban,
+  Gauge,
+  HelpCircle,
   ListTodo,
   Sparkles,
   Square,
+  Target,
+  Terminal,
   Trash2,
+  Users,
+  Zap,
 } from 'lucide-react';
 import { ReasoningEffort } from '@/types';
 import { useResizable } from '@/hooks/useResizable';
@@ -30,20 +41,104 @@ const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     command: '/review',
-    label: 'Przegląd kodu',
-    description: 'Dokonaj analizy i oceny wprowadzonych zmian',
+    label: 'Przegląd zmian (diff)',
+    description: 'Dokonaj analizy i oceny wprowadzonych zmian w kodzie',
     icon: FileSearch,
   },
   {
+    command: '/goal',
+    label: 'Tryb celu (autonomiczny)',
+    description: 'Autonomiczna realizacja zadania bez zatrzymywania się',
+    icon: Target,
+  },
+  {
+    command: '/models',
+    label: 'Lista modeli AI',
+    description: 'Wyświetl pełną listę obsługiwanych modeli',
+    icon: Cpu,
+  },
+  {
     command: '/model',
-    label: 'Tryb myślenia',
-    description: 'Dostosuj poziom wysiłku analitycznego modelu',
+    label: 'Przełącz model',
+    description: 'Wybierz model AI dla bieżącej sesji',
     icon: Brain,
   },
   {
+    command: '/effort',
+    label: 'Poziom myślenia',
+    description: 'Dostosuj wysiłek analityczny (low, medium, high)',
+    icon: Sparkles,
+  },
+  {
+    command: '/status',
+    label: 'Status sesji',
+    description: 'Telemetria, parametry, gałąź Git i środowisko',
+    icon: Activity,
+  },
+  {
+    command: '/tasks',
+    label: 'Zadania w tle',
+    description: 'Pokaż aktywne procesy i status zadań asynchronicznych',
+    icon: Gauge,
+  },
+  {
+    command: '/artifacts',
+    label: 'Artefakty i plany',
+    description: 'Lista zapisanych planów, diffów i dokumentów',
+    icon: FolderKanban,
+  },
+  {
+    command: '/boost',
+    label: 'Boost Mode',
+    description: 'Maksymalna analiza, pre-mortem i rygorystyczne testy',
+    icon: Zap,
+  },
+  {
+    command: '/grill-me',
+    label: 'Wywiad architektoniczny',
+    description: 'Krytyczny wywiad z pytaniami o założenia projektu',
+    icon: HelpCircle,
+  },
+  {
+    command: '/teamwork-preview',
+    label: 'Zespół agentów (Swarm)',
+    description: 'Koordynacja wyspecjalizowanych subagentów',
+    icon: Users,
+  },
+  {
+    command: '/schedule',
+    label: 'Harmonogram / Timer',
+    description: 'Zaplanuj timer lub zadanie cykliczne cron',
+    icon: Clock,
+  },
+  {
+    command: '/skills',
+    label: 'Dostępne umiejętności',
+    description: 'Lista zarejestrowanych skilli w projekcie',
+    icon: Terminal,
+  },
+  {
+    command: '/agents',
+    label: 'Dostępni agenci',
+    description: 'Role agentów: Builder, Tester, Challenger, Evaluator',
+    icon: Users,
+  },
+  {
+    command: '/learn',
+    label: 'Zapisz regułę',
+    description: 'Utrwal wiedzę w projekcie dla przyszłych zadań',
+    icon: BookOpen,
+  },
+  {
+    command: '/help',
+    label: 'Pomoc Antigravity CLI',
+    description: 'Pełna lista poleceń slash i przewodnik',
+    icon: HelpCircle,
+  },
+  {
     command: '/clear',
-    label: 'Wyczyść widok',
-    description: 'Zresetuj bieżący widok rozmowy',
+    label: 'Wyczyść stan',
+    description: 'Zresetuj stan sesji do spoczynku',
     icon: Trash2,
   },
 ];
@@ -134,13 +229,22 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
     adjustHeight();
   }, [text, isManualHeight, composerHeight]);
 
+  const filteredSlashCommands = SLASH_COMMANDS.filter((cmd) => {
+    if (!text.startsWith('/')) return false;
+    const searchWord = text.split(/\s+/)[0].toLowerCase();
+    return cmd.command.toLowerCase().startsWith(searchWord);
+  });
+
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     setText(val);
 
     // Show slash commands popup if input starts with '/' or last word starts with '/'
     if (val.startsWith('/') && !val.includes(' ')) {
-      setShowSlashMenu(true);
+      const filtered = SLASH_COMMANDS.filter((cmd) =>
+        cmd.command.toLowerCase().startsWith(val.toLowerCase())
+      );
+      setShowSlashMenu(filtered.length > 0);
       setSelectedSlashIndex(0);
     } else {
       setShowSlashMenu(false);
@@ -160,14 +264,13 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
       setShowModelMenu(true);
       return;
     }
-    // For /plan or /review, populate friendly text
-    if (cmd.command === '/plan') {
-      setText('Przygotuj szczegółowy plan implementacji dla tego zadania: ');
-    } else if (cmd.command === '/review') {
-      setText('Przejrzyj dotychczasowe zmiany w kodzie i sprawdź jakość implementacji.');
-    } else {
-      setText(`${cmd.command} `);
+    if (cmd.command === '/effort') {
+      setText('');
+      setShowSlashMenu(false);
+      setShowEffortMenu(true);
+      return;
     }
+    setText(`${cmd.command} `);
     setShowSlashMenu(false);
     if (textareaRef.current) {
       textareaRef.current.focus();
@@ -175,20 +278,23 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (showSlashMenu) {
+    if (showSlashMenu && filteredSlashCommands.length > 0) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        setSelectedSlashIndex((prev) => (prev + 1) % SLASH_COMMANDS.length);
+        setSelectedSlashIndex((prev) => (prev + 1) % filteredSlashCommands.length);
         return;
       }
       if (e.key === 'ArrowUp') {
         e.preventDefault();
-        setSelectedSlashIndex((prev) => (prev - 1 + SLASH_COMMANDS.length) % SLASH_COMMANDS.length);
+        setSelectedSlashIndex((prev) => (prev - 1 + filteredSlashCommands.length) % filteredSlashCommands.length);
         return;
       }
       if (e.key === 'Enter' || e.key === 'Tab') {
         e.preventDefault();
-        handleSelectSlashCommand(SLASH_COMMANDS[selectedSlashIndex]);
+        const selected = filteredSlashCommands[selectedSlashIndex] || filteredSlashCommands[0];
+        if (selected) {
+          handleSelectSlashCommand(selected);
+        }
         return;
       }
       if (e.key === 'Escape') {
@@ -255,13 +361,13 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
   return (
     <div className="relative w-full max-w-4xl mx-auto px-3 sm:px-4 pb-3">
       {/* Slash command popover */}
-      {showSlashMenu && (
+      {showSlashMenu && filteredSlashCommands.length > 0 && (
         <div className="absolute bottom-full mb-2 left-3 sm:left-4 w-80 max-w-[calc(100vw-24px)] bg-surface border border-border rounded-2xl shadow-xl overflow-hidden z-30 transition-all">
           <div className="p-2 border-b border-border text-[11px] font-medium text-muted uppercase tracking-wider">
-            Dostępne polecenia
+            Polecenia slash ({filteredSlashCommands.length})
           </div>
           <div className="p-1 space-y-0.5 max-h-60 overflow-y-auto">
-            {SLASH_COMMANDS.map((cmd, idx) => {
+            {filteredSlashCommands.map((cmd, idx) => {
               const Icon = cmd.icon;
               const isSelected = idx === selectedSlashIndex;
               return (

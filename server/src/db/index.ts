@@ -624,6 +624,12 @@ export function upsertArtifact(artifact: Artifact, db = getDatabase()): void {
   );
 }
 
+export function listArtifacts(sessionId: string, db = getDatabase()): Artifact[] {
+  return db.prepare(`
+    SELECT * FROM artifacts WHERE session_id = ? ORDER BY created_at DESC
+  `).all(sessionId) as Artifact[];
+}
+
 export function getSetting(key: string, db = getDatabase()): string | null {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
   return row ? row.value : null;
@@ -636,3 +642,4 @@ export function setSetting(key: string, value: string, db = getDatabase()): void
     ON CONFLICT(key) DO UPDATE SET value = excluded.value
   `).run(key, value);
 }
+

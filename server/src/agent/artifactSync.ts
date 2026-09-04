@@ -23,41 +23,56 @@ export function detectPlanStructure(userPrompt: string, assistantContent: string
   const lowerContent = assistantContent.toLowerCase();
 
   const isPlanRequested =
-    userPrompt.startsWith('/plan') ||
+    userPrompt.trim().startsWith('/plan') ||
+    lowerPrompt.includes('[plan implementacji') ||
     lowerPrompt.includes('plan implementacji') ||
     lowerPrompt.includes('plan działania') ||
     lowerPrompt.includes('opracuj plan') ||
     lowerPrompt.includes('szczegółowy plan') ||
     lowerPrompt.includes('przygotuj plan');
 
-  const hasPlanMarkers =
-    (assistantContent.includes('Faza 1') ||
-      assistantContent.includes('Etap 1') ||
-      assistantContent.includes('Krok 1') ||
-      assistantContent.includes('Phase 1') ||
-      assistantContent.includes('## Plan') ||
-      assistantContent.includes('# Plan') ||
-      lowerContent.includes('plan implementacji') ||
-      lowerContent.includes('harmonogram prac') ||
-      lowerContent.includes('architektura i wdrożenie')) &&
-    assistantContent.length > 300;
+  if (isPlanRequested) {
+    if (!assistantContent || assistantContent.trim().length < 40) {
+      return null;
+    }
+  } else {
+    if (!assistantContent || assistantContent.trim().length < 150) {
+      return null;
+    }
+    const hasPlanMarkers =
+      (assistantContent.includes('Faza 1') ||
+        assistantContent.includes('Etap 1') ||
+        assistantContent.includes('Krok 1') ||
+        assistantContent.includes('Phase 1') ||
+        assistantContent.includes('## Plan') ||
+        assistantContent.includes('# Plan') ||
+        lowerContent.includes('plan implementacji') ||
+        lowerContent.includes('harmonogram prac') ||
+        lowerContent.includes('architektura i wdrożenie')) &&
+      assistantContent.length > 250;
 
-  if (!isPlanRequested && !hasPlanMarkers) {
-    return null;
+    if (!hasPlanMarkers) {
+      return null;
+    }
   }
 
   // Determine a concise, descriptive title
   let title = 'Plan implementacji';
 
-  if (userPrompt.includes(':')) {
+  if (userPrompt.includes('Zadanie:')) {
+    const afterTask = userPrompt.split('Zadanie:')[1].split('\n')[0].trim();
+    if (afterTask.length > 0 && afterTask.length < 70) {
+      title = `Plan: ${afterTask}`;
+    }
+  } else if (userPrompt.trim().startsWith('/plan')) {
+    const task = userPrompt.trim().replace(/^\/plan\s*/i, '').trim();
+    if (task.length > 0 && task.length < 70) {
+      title = `Plan: ${task}`;
+    }
+  } else if (userPrompt.includes(':')) {
     const afterColon = userPrompt.split(':').slice(1).join(':').trim();
     if (afterColon.length > 0 && afterColon.length < 70) {
       title = `Plan: ${afterColon}`;
-    }
-  } else if (userPrompt.startsWith('/plan')) {
-    const task = userPrompt.replace('/plan', '').trim();
-    if (task.length > 0 && task.length < 70) {
-      title = `Plan: ${task}`;
     }
   } else {
     // Try to find first markdown header in assistant content
