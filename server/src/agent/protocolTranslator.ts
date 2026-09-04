@@ -17,6 +17,7 @@ import {
   syncBrainDirArtifacts,
 } from './artifactSync.js';
 import { processSlashCommand } from './slashCommands.js';
+import { getSubagentsForSession } from './subagentTracker.js';
 import type {
   SSEEventType,
   SSEEventEnvelope,
@@ -28,9 +29,12 @@ import type {
   ToolCompletePayload,
   DiffCreatedPayload,
   SlashCommandResultPayload,
+  SubagentUpdatePayload,
+  SubagentSession,
   ToolStatus,
   ReasoningEffort,
   MessageRole,
+  AttachmentPayload,
 } from '../types/contract.js';
 
 // ============================================================================
@@ -105,10 +109,18 @@ export interface RunAgentTurnOptions {
   prompt: string;
   model?: string;
   effort?: ReasoningEffort;
+  attachments?: AttachmentPayload[];
+}
+
+function formatAttachmentSize(bytes: number): string {
+  if (!bytes || bytes <= 0) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 export async function runAgentTurn(options: RunAgentTurnOptions): Promise<void> {
-  let { sessionId, prompt } = options;
+  let { sessionId, prompt, attachments } = options;
 
   // 1. Check for read-only slash command interception
   const slashResult = await handleSlashCommand(sessionId, prompt);
@@ -145,10 +157,18 @@ export async function runAgentTurn(options: RunAgentTurnOptions): Promise<void> 
     }
   }
 
-  // 2. Persist User Message to DB
+  // 2. Persist User Message to DB (including attachment summary if present)
+  let dbUserContent = prompt;
+  if (attachments && attachments.length > 0) {
+    const attachmentSummary = attachments
+      .map((att) => `- 📎 **${att.name}** (${att.mimeType}, ${formatAttachmentSize(att.size)})`)
+      .join('\n');
+    dbUserContent = `${prompt}\n\n**Załączniki:**\n${attachmentSummary}`;
+  }
+
   appendTurn(sessionId, {
     role: 'user',
-    content: prompt,
+    content: dbUserContent,
     status: 'completed',
   });
 
@@ -220,6 +240,7 @@ export async function runAgentTurn(options: RunAgentTurnOptions): Promise<void> 
   // Determine CLI binary location
   const agyBin = process.env.AGY_BIN || 'agy';
 
+  const printTimeout = process.env.AGY_PRINT_TIMEOUT || '60m';
   const args = [
     '--input-format',
     'stream-json',
@@ -229,7 +250,7 @@ export async function runAgentTurn(options: RunAgentTurnOptions): Promise<void> 
     '--model',
     activeModel,
     '--print-timeout',
-    '10m',
+    printTimeout,
   ];
 
   // Only pass --effort if model does not already encode effort and is not claude/gpt
@@ -251,20 +272,38 @@ export async function runAgentTurn(options: RunAgentTurnOptions): Promise<void> 
     args.push('--add-dir', cwd);
   }
 
-  // 3. Spawn managed POSIX process group
+  // 3. Spawn managed POSIX process group with resilience environment variables
+  const silenceTimeout = process.env.INBOUND_SILENCE_TIMEOUT || '60m';
   const proc = new ManagedProcessGroup({
     cmd: agyBin,
     args,
     cwd,
+    env: {
+      ...process.env,
+      INBOUND_SILENCE_TIMEOUT: silenceTimeout,
+      AGY_PRINT_TIMEOUT: printTimeout,
+    },
   });
 
   processRegistry.register(sessionId, proc);
 
   // 4. Send NDJSON user input turn to child stdin
+  let agyContent = prompt;
+  if (attachments && attachments.length > 0) {
+    const attachmentLines = attachments
+      .map((att) => {
+        const filePath = att.filePath || att.name;
+        return `- **${att.name}** (${att.mimeType}, ${formatAttachmentSize(att.size)}): \`${filePath}\``;
+      })
+      .join('\n');
+
+    agyContent = `${prompt}\n\n### User Attachments\nThe user has attached the following file(s):\n${attachmentLines}\n\nPlease inspect the attached file(s) using the \`view_file\` tool (with the absolute path provided above) to examine their content or images before responding.`;
+  }
+
   const inputMessage = JSON.stringify({
     event: 'user',
     message: {
-      content: prompt,
+      content: agyContent,
     },
   });
 
@@ -446,6 +485,18 @@ export async function runAgentTurn(options: RunAgentTurnOptions): Promise<void> 
           sessionEventHub.broadcast(sessionId, 'tool_complete', completePayload);
 
           activeTools.delete(stepIndex);
+
+          // If subagent tool was executed, immediately broadcast subagents state
+          if (['invoke_subagent', 'manage_subagents'].includes(toolName)) {
+            try {
+              const subs = getSubagentsForSession(sessionId);
+              if (subs.length > 0) {
+                sessionEventHub.broadcast(sessionId, 'subagent_update', { subagents: subs });
+              }
+            } catch (subErr) {
+              console.warn(`[subagent_update:error:${sessionId}]`, subErr);
+            }
+          }
         }
       }
     }
@@ -455,7 +506,11 @@ export async function runAgentTurn(options: RunAgentTurnOptions): Promise<void> 
       const res = parsed.result;
       if (res.status === 'ERROR') {
         const errMsg = res.error || 'Antigravity execution failed';
-        accumulatedResponse = `⚠️ **Błąd wykonania zadania:**\n\n\`\`\`\n${errMsg}\n\`\`\``;
+        if (errMsg.toLowerCase().includes('timeout')) {
+          accumulatedResponse = `⚠️ **Przekroczono limit czasu operacji (timeout):**\n\n\`\`\`\n${errMsg}\n\`\`\`\n\n*Limit oczekiwania został skonfigurowany na 60 minut (\`AGY_PRINT_TIMEOUT=60m\`). W przypadku długich operacji wieloagentowych (swarmy subagentów, kompilacje) stan został zachowany w pamięci sesji — możesz wpisać kolejną wiadomość, a Antigravity podejmie przerwany kontekst.*`;
+        } else {
+          accumulatedResponse = `⚠️ **Błąd wykonania zadania:**\n\n\`\`\`\n${errMsg}\n\`\`\``;
+        }
         sessionEventHub.broadcast(sessionId, 'turn_error', { message: errMsg });
       } else if (res.response) {
         accumulatedResponse = res.response;
@@ -483,6 +538,18 @@ export async function runAgentTurn(options: RunAgentTurnOptions): Promise<void> 
     }
   };
 
+  // Periodic poll for subagents during active execution
+  const subagentPollInterval = setInterval(() => {
+    try {
+      const subs = getSubagentsForSession(sessionId);
+      if (subs.length > 0) {
+        sessionEventHub.broadcast(sessionId, 'subagent_update', { subagents: subs });
+      }
+    } catch {
+      // non-fatal
+    }
+  }, 3500);
+
   proc.child.stdout?.on('data', (chunk: Buffer) => {
     stdoutBuffer += chunk.toString('utf-8');
     let lineEnd: number;
@@ -502,6 +569,8 @@ export async function runAgentTurn(options: RunAgentTurnOptions): Promise<void> 
 
   try {
     const exitResult = await proc.exitPromise;
+    clearInterval(subagentPollInterval);
+
     // Process remaining buffer
     if (stdoutBuffer.length > 0) {
       handleLine(stdoutBuffer);
@@ -511,6 +580,14 @@ export async function runAgentTurn(options: RunAgentTurnOptions): Promise<void> 
     // Final check for thinking
     pollTranscript();
 
+    // Final subagents broadcast
+    try {
+      const finalSubs = getSubagentsForSession(sessionId);
+      if (finalSubs.length > 0) {
+        sessionEventHub.broadcast(sessionId, 'subagent_update', { subagents: finalSubs });
+      }
+    } catch {}
+
     const finalStatus = 'idle';
 
     let finalContent = accumulatedResponse;
@@ -518,7 +595,12 @@ export async function runAgentTurn(options: RunAgentTurnOptions): Promise<void> 
       if (exitResult.code === 0) {
         finalContent = 'Zadanie zostało zakończone.';
       } else {
-        finalContent = `⚠️ **Błąd wykonania zadania (kod ${exitResult.code}):**\n\n\`\`\`\n${stderrBuffer.trim() || 'Nieznany błąd wykonania agy'}\n\`\`\``;
+        const isTimeout = stderrBuffer.toLowerCase().includes('timeout');
+        if (isTimeout) {
+          finalContent = `⚠️ **Limit czasu oczekiwania został przekroczony (timeout):**\n\n\`\`\`\n${stderrBuffer.trim()}\n\`\`\`\n\n*Limit czasu został zwiększony do 60 minut. Wpisz polecenie, aby kontynuować.*`;
+        } else {
+          finalContent = `⚠️ **Błąd wykonania zadania (kod ${exitResult.code}):**\n\n\`\`\`\n${stderrBuffer.trim() || 'Nieznany błąd wykonania agy'}\n\`\`\``;
+        }
         sessionEventHub.broadcast(sessionId, 'turn_error', {
           message: stderrBuffer.trim() || `Proces zakończył się kodem błędu ${exitResult.code}`,
         });
@@ -551,6 +633,7 @@ export async function runAgentTurn(options: RunAgentTurnOptions): Promise<void> 
     updateSessionStatus(sessionId, finalStatus);
     sessionEventHub.broadcast(sessionId, 'session_status', { status: finalStatus });
   } catch (err: any) {
+    clearInterval(subagentPollInterval);
     sessionEventHub.broadcast(sessionId, 'turn_error', {
       error: err.message || 'Error occurred during agent turn execution',
     });

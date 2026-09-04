@@ -132,6 +132,50 @@ export function getToolDisplayInfo(toolName: string, args: Record<string, unknow
     };
   }
 
+  // Subagents and swarm coordination
+  if (norm.includes('subagent') || norm.includes('manage_subagents') || norm.includes('send_message')) {
+    if (norm.includes('invoke')) {
+      let subCount = 1;
+      try {
+        let subs = args.Subagents;
+        if (typeof subs === 'string') subs = JSON.parse(subs);
+        if (Array.isArray(subs)) subCount = subs.length;
+      } catch {}
+
+      return {
+        title: `Uruchomienie podagentów (${subCount})`,
+        subtitle: (args.toolAction as string) || (args.toolSummary as string) || 'Delegowanie zadań do zespołu',
+        icon: 'Users',
+      };
+    }
+
+    if (norm.includes('define')) {
+      const name = (args.name as string) || '';
+      return {
+        title: name ? `Definicja roli: ${name}` : 'Nowa rola agenta',
+        subtitle: (args.description as string) || 'Rejestracja profilu subagenta',
+        icon: 'Bot',
+      };
+    }
+
+    if (norm.includes('manage')) {
+      const action = (args.Action as string) || '';
+      return {
+        title: action ? `Zarządzanie: ${action}` : 'Status podagentów',
+        subtitle: (args.toolAction as string) || 'Kontrola i koordynacja procesów',
+        icon: 'Users',
+      };
+    }
+
+    if (norm.includes('send_message')) {
+      return {
+        title: 'Wiadomość wewnętrzna',
+        subtitle: (args.Recipient as string) ? `Do agenta: ${args.Recipient}` : 'Komunikacja między procesami',
+        icon: 'MessageSquare',
+      };
+    }
+  }
+
   const action = (args.toolAction || args.toolSummary) as string;
   return {
     title: action || `Narzędzie: ${toolName}`,

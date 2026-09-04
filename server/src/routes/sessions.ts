@@ -1,4 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
+import path from 'node:path';
+import fs from 'node:fs';
+import crypto from 'node:crypto';
 import { z } from 'zod';
 import {
   listSessions,
@@ -11,12 +14,14 @@ import {
 } from '../db/index.js';
 import { processRegistry } from '../agent/processGroup.js';
 import { runAgentTurn, sessionEventHub } from '../agent/protocolTranslator.js';
+import { getSubagentsForSession, getSubagentDetails } from '../agent/subagentTracker.js';
 import { getDefaultWorkspaceRoot } from '../security/workspaceGuard.js';
 import type {
   ReasoningEffort,
   Session,
   SessionSummary,
   HydratedSession,
+  AttachmentPayload,
 } from '../types/contract.js';
 
 const CreateSessionSchema = z.object({
@@ -33,10 +38,20 @@ const UpdateSessionSchema = z.object({
   effort: z.enum(['low', 'medium', 'high']).optional(),
 });
 
+const AttachmentSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  mimeType: z.string(),
+  size: z.number(),
+  dataUrl: z.string().optional(),
+  filePath: z.string().optional(),
+});
+
 const PromptSchema = z.object({
   prompt: z.string().min(1, 'Prompt cannot be empty'),
   model: z.string().optional(),
   effort: z.enum(['low', 'medium', 'high']).optional(),
+  attachments: z.array(AttachmentSchema).optional(),
 });
 
 export const sessionRoutes: FastifyPluginAsync = async (fastify) => {
@@ -123,42 +138,72 @@ export const sessionRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // POST /api/sessions/:id/prompt
-  fastify.post<{ Params: { id: string } }>('/api/sessions/:id/prompt', async (req, reply) => {
-    const { id } = req.params;
-    const session = getSession(id);
+  fastify.post<{ Params: { id: string } }>(
+    '/api/sessions/:id/prompt',
+    { bodyLimit: 30 * 1024 * 1024 },
+    async (req, reply) => {
+      const { id } = req.params;
+      const session = getSession(id);
 
-    if (!session) {
-      return reply.status(404).send({
-        error: 'Not Found',
-        message: `Session ${id} not found`,
+      if (!session) {
+        return reply.status(404).send({
+          error: 'Not Found',
+          message: `Session ${id} not found`,
+        });
+      }
+
+      const parseResult = PromptSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return reply.status(400).send({
+          error: 'Bad Request',
+          details: parseResult.error.flatten(),
+        });
+      }
+
+      const { prompt, model, effort, attachments } = parseResult.data;
+
+      // Ingest attachments if present with dataUrl
+      if (attachments && attachments.length > 0) {
+        const attachmentsDir = path.join(session.workspace_path, '.antigravity', 'attachments');
+        if (!fs.existsSync(attachmentsDir)) {
+          fs.mkdirSync(attachmentsDir, { recursive: true });
+        }
+
+        for (const att of attachments) {
+          if (att.dataUrl) {
+            const sanitized = path.basename(att.name).replace(/[^a-zA-Z0-9._-]/g, '_');
+            const storageName = `${Date.now()}_${crypto.randomUUID().slice(0, 8)}_${sanitized}`;
+            const absolutePath = path.join(attachmentsDir, storageName);
+
+            const base64Data = att.dataUrl.includes(';base64,')
+              ? att.dataUrl.split(';base64,')[1]
+              : att.dataUrl;
+            const buffer = Buffer.from(base64Data, 'base64');
+            fs.writeFileSync(absolutePath, buffer);
+
+            att.filePath = absolutePath;
+            delete att.dataUrl;
+          }
+        }
+      }
+
+      // Launch the agent turn asynchronously
+      runAgentTurn({
+        sessionId: id,
+        prompt,
+        model,
+        effort: effort as ReasoningEffort | undefined,
+        attachments,
+      }).catch((err) => {
+        console.error(`[AgentTurnError:${id}]`, err);
+      });
+
+      return reply.status(202).send({
+        accepted: true,
+        session_id: id,
       });
     }
-
-    const parseResult = PromptSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      return reply.status(400).send({
-        error: 'Bad Request',
-        details: parseResult.error.flatten(),
-      });
-    }
-
-    const { prompt, model, effort } = parseResult.data;
-
-    // Launch the agent turn asynchronously
-    runAgentTurn({
-      sessionId: id,
-      prompt,
-      model,
-      effort: effort as ReasoningEffort | undefined,
-    }).catch((err) => {
-      console.error(`[AgentTurnError:${id}]`, err);
-    });
-
-    return reply.status(202).send({
-      accepted: true,
-      session_id: id,
-    });
-  });
+  );
 
   // POST /api/sessions/:id/cancel
   fastify.post<{ Params: { id: string } }>('/api/sessions/:id/cancel', async (req, reply) => {
@@ -182,6 +227,48 @@ export const sessionRoutes: FastifyPluginAsync = async (fastify) => {
       message: cancelled ? 'Agent process cancelled' : 'Session marked as aborted',
     });
   });
+
+  // GET /api/sessions/:id/subagents
+  fastify.get<{ Params: { id: string } }>('/api/sessions/:id/subagents', async (req, reply) => {
+    const { id } = req.params;
+    const session = getSession(id);
+
+    if (!session) {
+      return reply.status(404).send({
+        error: 'Not Found',
+        message: `Session ${id} not found`,
+      });
+    }
+
+    const subagents = getSubagentsForSession(id);
+    return reply.status(200).send({ subagents });
+  });
+
+  // GET /api/sessions/:id/subagents/:subagentId
+  fastify.get<{ Params: { id: string; subagentId: string } }>(
+    '/api/sessions/:id/subagents/:subagentId',
+    async (req, reply) => {
+      const { id, subagentId } = req.params;
+      const session = getSession(id);
+
+      if (!session) {
+        return reply.status(404).send({
+          error: 'Not Found',
+          message: `Session ${id} not found`,
+        });
+      }
+
+      const details = getSubagentDetails(id, subagentId);
+      if (!details) {
+        return reply.status(404).send({
+          error: 'Not Found',
+          message: `Subagent ${subagentId} not found in session ${id}`,
+        });
+      }
+
+      return reply.status(200).send(details);
+    }
+  );
 
   // GET /api/sessions/:id/stream (SSE)
   fastify.get<{ Params: { id: string } }>('/api/sessions/:id/stream', async (req, reply) => {
@@ -219,6 +306,25 @@ export const sessionRoutes: FastifyPluginAsync = async (fastify) => {
         initialStatusEnvelope
       )}\n\n`
     );
+
+    // Send initial subagents list if available
+    try {
+      const existingSubs = getSubagentsForSession(id);
+      if (existingSubs.length > 0) {
+        const subEnv = {
+          seq: sessionEventHub.getNextSeq(id),
+          session_id: id,
+          timestamp: Date.now(),
+          type: 'subagent_update',
+          payload: { subagents: existingSubs },
+        };
+        rawRes.write(
+          `id: ${subEnv.seq}\nevent: subagent_update\ndata: ${JSON.stringify(subEnv)}\n\n`
+        );
+      }
+    } catch {
+      // non-fatal
+    }
 
     // Heartbeat every 15s to keep proxy connections alive
     const heartbeatInterval = setInterval(() => {

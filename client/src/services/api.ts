@@ -3,6 +3,7 @@
  */
 
 import {
+  AttachmentPayload,
   FileDiff,
   AuthMeResponse,
   CreateSessionRequest,
@@ -16,6 +17,8 @@ import {
   WorkspaceFileResponse,
   WorkspaceTreeNode,
   WorkspaceTreeResponse,
+  SubagentSession,
+  SubagentDetailResponse,
 } from '@/types';
 
 const getApiBase = () => {
@@ -90,9 +93,10 @@ export const api = {
     sessionId: string,
     prompt: string,
     model?: string,
-    effort?: ReasoningEffort
+    effort?: ReasoningEffort,
+    attachments?: AttachmentPayload[]
   ): Promise<{ message_id: string }> {
-    const body: PromptRequest = { prompt, model, effort };
+    const body: PromptRequest = { prompt, model, effort, attachments };
     const res = await fetch(`${BASE_URL}/sessions/${sessionId}/prompt`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -170,5 +174,15 @@ export const api = {
       root: string;
       diffs: FileDiff[];
     }>(res);
+  },
+
+  async getSubagents(sessionId: string): Promise<{ subagents: SubagentSession[] }> {
+    const res = await fetch(`${BASE_URL}/sessions/${sessionId}/subagents`);
+    return handleResponse<{ subagents: SubagentSession[] }>(res);
+  },
+
+  async getSubagentDetails(sessionId: string, subagentId: string): Promise<SubagentDetailResponse> {
+    const res = await fetch(`${BASE_URL}/sessions/${sessionId}/subagents/${subagentId}`);
+    return handleResponse<SubagentDetailResponse>(res);
   },
 };

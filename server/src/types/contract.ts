@@ -37,6 +37,7 @@ export interface Message {
   status: 'pending' | 'streaming' | 'completed' | 'failed';
   created_at: number; // ms
   tool_executions?: ToolExecution[];
+  attachments?: AttachmentPayload[];
 }
 
 export interface ToolExecution {
@@ -133,10 +134,20 @@ export interface UpdateSessionRequest {
   effort?: ReasoningEffort;
 }
 
+export interface AttachmentPayload {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  dataUrl?: string;
+  filePath?: string;
+}
+
 export interface PromptRequest {
   prompt: string;
   model?: string;
   effort?: ReasoningEffort;
+  attachments?: AttachmentPayload[];
 }
 
 export interface WorkspaceTreeNode {
@@ -174,6 +185,58 @@ export interface WorkspaceFileResponse {
   isBinary?: boolean;
 }
 
+export type SubagentState =
+  | 'running'
+  | 'idle'
+  | 'waiting_for_message'
+  | 'completed'
+  | 'errored'
+  | 'unspecified';
+
+export interface SubagentSession {
+  id: string; // conversationId
+  parentId: string;
+  role: string;
+  type: string;
+  model?: string;
+  prompt?: string;
+  state: SubagentState;
+  stateDetail?: string;
+  currentStep?: string;
+  stepsCount: number;
+  lastActive?: number;
+  createdAt?: number;
+  transcriptUri?: string;
+  recentLogs?: string[];
+}
+
+export interface SubagentsListResponse {
+  subagents: SubagentSession[];
+}
+
+export interface SubagentTranscriptTurn {
+  step_index: number;
+  source: string;
+  type: string;
+  status: string;
+  created_at: string;
+  content?: string;
+  thinking?: string;
+  tool_calls?: Array<{
+    name: string;
+    args: Record<string, unknown>;
+  }>;
+}
+
+export interface SubagentDetailResponse {
+  subagent: SubagentSession;
+  transcript: SubagentTranscriptTurn[];
+}
+
+export interface SubagentUpdatePayload {
+  subagents: SubagentSession[];
+}
+
 // ============================================================================
 // 3. Real-Time Streaming (SSE) Protocol
 // ============================================================================
@@ -191,6 +254,7 @@ export type SSEEventType =
   | 'artifact_created'
   | 'artifact_updated'
   | 'slash_command_result'
+  | 'subagent_update'
   | 'turn_error'
   | 'heartbeat';
 

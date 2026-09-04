@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  Bot,
   Check,
   ChevronDown,
   ChevronRight,
@@ -11,8 +12,10 @@ import {
   FolderSearch,
   Globe,
   Loader2,
+  MessageSquare,
   Search,
   Terminal,
+  Users,
   Wrench,
 } from 'lucide-react';
 import { ToolExecution } from '@/types';
@@ -22,9 +25,10 @@ import { formatDuration } from '@/utils/formatters';
 interface ToolExecutionCardProps {
   tool: ToolExecution;
   onViewDiff?: (filePath: string) => void;
+  onOpenSubagents?: () => void;
 }
 
-export const ToolExecutionCard: React.FC<ToolExecutionCardProps> = React.memo(({ tool, onViewDiff }) => {
+export const ToolExecutionCard: React.FC<ToolExecutionCardProps> = React.memo(({ tool, onViewDiff, onOpenSubagents }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showRawArgs, setShowRawArgs] = useState(false);
@@ -56,6 +60,12 @@ export const ToolExecutionCard: React.FC<ToolExecutionCardProps> = React.memo(({
         return <FolderSearch className="w-4 h-4 text-blue-500 shrink-0" />;
       case 'Globe':
         return <Globe className="w-4 h-4 text-teal-500 shrink-0" />;
+      case 'Users':
+        return <Users className="w-4 h-4 text-violet-500 shrink-0" />;
+      case 'Bot':
+        return <Bot className="w-4 h-4 text-indigo-500 shrink-0" />;
+      case 'MessageSquare':
+        return <MessageSquare className="w-4 h-4 text-cyan-500 shrink-0" />;
       default:
         return <Wrench className="w-4 h-4 text-neutral-400 shrink-0" />;
     }
@@ -242,6 +252,31 @@ export const ToolExecutionCard: React.FC<ToolExecutionCardProps> = React.memo(({
                   <span className="text-main leading-relaxed">{actionDesc}</span>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Subagents invocation card if tool is invoke_subagent */}
+          {tool.tool_name === 'invoke_subagent' && (
+            <div className="p-3 rounded-xl bg-surface/80 border border-primary/20 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-main flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5 text-primary" />
+                  Zlecono wykonanie zadania podagentom
+                </span>
+                {onOpenSubagents && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenSubagents();
+                    }}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-primary/15 hover:bg-primary/25 text-primary text-[11px] font-semibold transition-colors cursor-pointer"
+                  >
+                    <span>Otwórz w podsesjach</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
           )}
 

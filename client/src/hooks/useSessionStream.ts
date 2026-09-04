@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Artifact,
+  AttachmentPayload,
   DiffCreatedPayload,
   FileDiff,
   HydratedSession,
@@ -17,6 +18,7 @@ import {
   ToolExecution,
   ToolProgressPayload,
   ToolStartPayload,
+  SubagentSession,
 } from '@/types';
 import { api } from '@/services/api';
 import { SessionSSEClient, SSEConnectionStatus } from '@/services/sse';
@@ -34,6 +36,7 @@ export function useSessionStream(sessionId: string | null) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [diffs, setDiffs] = useState<FileDiff[]>([]);
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
+  const [subagents, setSubagents] = useState<SubagentSession[]>([]);
   const [sessionStatus, setSessionStatus] = useState<SessionStatus>('idle');
   const [connectionStatus, setConnectionStatus] = useState<SSEConnectionStatus>('disconnected');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -141,6 +144,14 @@ export function useSessionStream(sessionId: string | null) {
           });
         });
         setDiffs(allDiffs);
+
+        // Fetch subagents for the session
+        api
+          .getSubagents(sessionId!)
+          .then((res) => {
+            if (isMounted) setSubagents(res.subagents || []);
+          })
+          .catch(() => {});
       } catch (err) {
         console.warn('Nie można załadować szczegółów sesji z serwera:', err);
         if (!isMounted) return;
@@ -333,6 +344,14 @@ export function useSessionStream(sessionId: string | null) {
         break;
       }
 
+      case 'subagent_update': {
+        const payload = envelope.payload as { subagents: SubagentSession[] };
+        if (payload && Array.isArray(payload.subagents)) {
+          setSubagents(payload.subagents);
+        }
+        break;
+      }
+
       case 'turn_error': {
         const payload = envelope.payload as { message: string };
         setIsGenerating(false);
@@ -383,17 +402,25 @@ export function useSessionStream(sessionId: string | null) {
 
   // Send prompt action
   const sendPrompt = useCallback(
-    async (promptText: string, model?: string, effort?: ReasoningEffort) => {
-      if (!sessionId || !promptText.trim()) return;
+    async (
+      promptText: string,
+      model?: string,
+      effort?: ReasoningEffort,
+      attachments?: AttachmentPayload[]
+    ) => {
+      const trimmedText = promptText.trim();
+      const hasAttachments = Boolean(attachments && attachments.length > 0);
+      if (!sessionId || (!trimmedText && !hasAttachments)) return;
 
       const userMsg: Message = {
         id: `user-${Date.now()}`,
         session_id: sessionId,
         sequence_num: messages.length + 1,
         role: 'user',
-        content: promptText.trim(),
+        content: trimmedText,
         status: 'completed',
         created_at: Date.now(),
+        attachments: hasAttachments ? attachments : undefined,
       };
 
       setMessages((prev) => [...prev, userMsg]);
@@ -408,7 +435,7 @@ export function useSessionStream(sessionId: string | null) {
       setActiveTools([]);
 
       try {
-        await api.sendPrompt(sessionId, promptText.trim(), model, effort);
+        await api.sendPrompt(sessionId, trimmedText, model, effort, attachments);
       } catch (err: any) {
         console.error('Błąd podczas wysyłania zapytania:', err);
         setIsGenerating(false);
@@ -465,11 +492,22 @@ export function useSessionStream(sessionId: string | null) {
     }
   }, [sessionId, streamingContent, currentThought]);
 
+  const refreshSubagents = useCallback(async () => {
+    if (!sessionId) return;
+    try {
+      const res = await api.getSubagents(sessionId);
+      setSubagents(res.subagents || []);
+    } catch {
+      // ignore
+    }
+  }, [sessionId]);
+
   return {
     session,
     messages,
     diffs,
     artifacts,
+    subagents,
     sessionStatus,
     connectionStatus,
     isGenerating,
@@ -479,5 +517,7 @@ export function useSessionStream(sessionId: string | null) {
     sendPrompt,
     abortGeneration,
     setMessages,
+    setSubagents,
+    refreshSubagents,
   };
 }

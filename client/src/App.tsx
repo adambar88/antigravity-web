@@ -31,6 +31,7 @@ export default function App() {
     messages,
     diffs,
     artifacts,
+    subagents,
     connectionStatus,
     isGenerating,
     currentThought,
@@ -39,6 +40,7 @@ export default function App() {
     sendPrompt,
     abortGeneration,
     setMessages,
+    refreshSubagents,
   } = useSessionStream(activeSessionId);
 
   // Scroll anchoring: watches streaming messages & thinking updates
@@ -60,6 +62,7 @@ export default function App() {
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>('diffs');
   const [mobileTab, setMobileTab] = useState<ActiveTab>('chat');
   const [highlightDiffPath, setHighlightDiffPath] = useState<string | null>(null);
+  const [selectedSubagentId, setSelectedSubagentId] = useState<string | null>(null);
   const [isNewSessionModalOpen, setIsNewSessionModalOpen] = useState(false);
   const [activeDiffsCount, setActiveDiffsCount] = useState(0);
 
@@ -92,6 +95,16 @@ export default function App() {
     setMobileTab('diffs');
   }, []);
 
+  // When opening subagents tab (optionally focusing a specific subagent)
+  const handleOpenSubagents = useCallback((subagentId?: string) => {
+    if (subagentId) {
+      setSelectedSubagentId(subagentId);
+    }
+    setInspectorTab('subagents');
+    setIsInspectorOpen(true);
+    setMobileTab('subagents');
+  }, []);
+
   // Handle mobile bottom navigation
   const handleMobileTabSelect = (tab: ActiveTab) => {
     setMobileTab(tab);
@@ -108,6 +121,10 @@ export default function App() {
       setIsSidebarMobileOpen(false);
     } else if (tab === 'artifacts') {
       setInspectorTab('artifacts');
+      setIsInspectorOpen(true);
+      setIsSidebarMobileOpen(false);
+    } else if (tab === 'subagents') {
+      setInspectorTab('subagents');
       setIsInspectorOpen(true);
       setIsSidebarMobileOpen(false);
     } else {
@@ -146,6 +163,10 @@ export default function App() {
         }}
         isOpenMobile={isSidebarMobileOpen}
         onCloseMobile={() => setIsSidebarMobileOpen(false)}
+        subagents={subagents}
+        onSelectSubagent={(subId) => {
+          handleOpenSubagents(subId);
+        }}
       />
 
       {/* Main Workspace Area */}
@@ -205,11 +226,12 @@ export default function App() {
               }}
               onQuickPrompt={(text) => sendPrompt(text)}
               onViewDiff={handleViewDiff}
+              onOpenSubagents={() => handleOpenSubagents()}
             />
 
             {/* Prompt Composer input bar */}
             <PromptComposer
-              onSend={(prompt, model, effort) => sendPrompt(prompt, model, effort)}
+              onSend={(prompt, model, effort, attachments) => sendPrompt(prompt, model, effort, attachments)}
               onAbort={abortGeneration}
               onClearCanvas={() => {
                 setMessages([]);
@@ -219,7 +241,7 @@ export default function App() {
             />
           </div>
 
-          {/* Inspector Panel (Diffs, File Tree, Artifacts/Plans) */}
+          {/* Inspector Panel (Diffs, File Tree, Artifacts/Plans, Subagents) */}
           <Inspector
             isOpen={isInspectorOpen}
             onClose={() => {
@@ -233,6 +255,10 @@ export default function App() {
             highlightFilePath={highlightDiffPath}
             workspacePath={activeWorkspacePath}
             onDiffsCountChange={(count) => setActiveDiffsCount(count)}
+            sessionId={activeSessionId}
+            subagents={subagents}
+            selectedSubagentId={selectedSubagentId}
+            onRefreshSubagents={refreshSubagents}
           />
         </div>
 
@@ -241,6 +267,7 @@ export default function App() {
           activeTab={mobileTab}
           onTabSelect={handleMobileTabSelect}
           diffsCount={activeDiffsCount || diffs.length}
+          subagentsCount={subagents.length}
         />
       </div>
 

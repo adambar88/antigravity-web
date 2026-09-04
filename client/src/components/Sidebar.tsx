@@ -1,13 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  Bot,
   MessageSquare,
   Plus,
   Search,
   Trash2,
+  Users,
   Wrench,
   X,
 } from 'lucide-react';
-import { SessionSummary } from '@/types';
+import { SessionSummary, SubagentSession } from '@/types';
 import { groupSessionsByDate } from '@/utils/formatters';
 import { useResizable } from '@/hooks/useResizable';
 import { ResizeHandle } from './ResizeHandle';
@@ -20,6 +22,8 @@ interface SidebarProps {
   onDeleteSession: (id: string) => void;
   isOpenMobile: boolean;
   onCloseMobile: () => void;
+  subagents?: SubagentSession[];
+  onSelectSubagent?: (subagentId: string) => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -30,6 +34,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onDeleteSession,
   isOpenMobile,
   onCloseMobile,
+  subagents = [],
+  onSelectSubagent,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -83,84 +89,132 @@ export const Sidebar: React.FC<SidebarProps> = ({
             const isDeleting = confirmDeleteId === session.id;
 
             return (
-              <div
-                key={session.id}
-                className={`group relative flex items-center justify-between rounded-xl px-3 py-2 text-xs transition-colors cursor-pointer ${
-                  isActive
-                    ? 'bg-primary/15 text-primary font-semibold'
-                    : 'text-main hover:bg-surface-hover'
-                }`}
-                onClick={() => {
-                  onSelectSession(session.id);
-                  onCloseMobile();
-                }}
-              >
-                <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                  <MessageSquare
-                    className={`w-4 h-4 shrink-0 ${
-                      isActive ? 'text-primary' : 'text-subtle group-hover:text-main'
-                    }`}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="text-xs break-words line-clamp-2 leading-snug font-medium">
-                      {session.title || 'Zadanie bez nazwy'}
+              <React.Fragment key={session.id}>
+                <div
+                  className={`group relative flex items-center justify-between rounded-xl px-3 py-2 text-xs transition-colors cursor-pointer ${
+                    isActive
+                      ? 'bg-primary/15 text-primary font-semibold'
+                      : 'text-main hover:bg-surface-hover'
+                  }`}
+                  onClick={() => {
+                    onSelectSession(session.id);
+                    onCloseMobile();
+                  }}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                    <MessageSquare
+                      className={`w-4 h-4 shrink-0 ${
+                        isActive ? 'text-primary' : 'text-subtle group-hover:text-main'
+                      }`}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs break-words line-clamp-2 leading-snug font-medium">
+                        {session.title || 'Zadanie bez nazwy'}
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-muted font-normal">
+                        <span
+                          className="truncate max-w-[120px] px-1 py-0.2 rounded bg-surface border border-border text-[9px] font-mono text-muted"
+                          title={session.workspace_path}
+                        >
+                          {session.workspace_path ? session.workspace_path.replace(/^\/home\/adam\/?/, '~/') || '~' : '~'}
+                        </span>
+                        <span>•</span>
+                        <span>{session.message_count || 0} wiad.</span>
+                        {session.tool_count > 0 && (
+                          <>
+                            <span>•</span>
+                            <span className="flex items-center gap-0.5">
+                              <Wrench className="w-2.5 h-2.5" />
+                              {session.tool_count}
+                            </span>
+                          </>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-muted font-normal">
-                      <span
-                        className="truncate max-w-[120px] px-1 py-0.2 rounded bg-surface border border-border text-[9px] font-mono text-muted"
-                        title={session.workspace_path}
+                  </div>
+
+                  {/* Delete button or confirmation */}
+                  <div className="shrink-0 ml-2" onClick={(e) => e.stopPropagation()}>
+                    {isDeleting ? (
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onDeleteSession(session.id);
+                            setConfirmDeleteId(null);
+                          }}
+                          className="px-1.5 py-0.5 rounded text-[10px] bg-rose-500 text-white font-medium hover:bg-rose-600 cursor-pointer"
+                        >
+                          Usuń
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteId(null)}
+                          className="px-1.5 py-0.5 rounded text-[10px] bg-card text-muted hover:text-main border border-border cursor-pointer"
+                        >
+                          Nie
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        title="Usuń to zadanie"
+                        onClick={() => setConfirmDeleteId(session.id)}
+                        className="p-1 rounded-md text-subtle opacity-0 group-hover:opacity-100 hover:text-rose-500 hover:bg-surface transition-all cursor-pointer"
                       >
-                        {session.workspace_path ? session.workspace_path.replace(/^\/home\/adam\/?/, '~/') || '~' : '~'}
-                      </span>
-                      <span>•</span>
-                      <span>{session.message_count || 0} wiad.</span>
-                      {session.tool_count > 0 && (
-                        <>
-                          <span>•</span>
-                          <span className="flex items-center gap-0.5">
-                            <Wrench className="w-2.5 h-2.5" />
-                            {session.tool_count}
-                          </span>
-                        </>
-                      )}
-                    </div>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
 
-                {/* Delete button or confirmation */}
-                <div className="shrink-0 ml-2" onClick={(e) => e.stopPropagation()}>
-                  {isDeleting ? (
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onDeleteSession(session.id);
-                          setConfirmDeleteId(null);
-                        }}
-                        className="px-1.5 py-0.5 rounded text-[10px] bg-rose-500 text-white font-medium hover:bg-rose-600 cursor-pointer"
-                      >
-                        Usuń
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setConfirmDeleteId(null)}
-                        className="px-1.5 py-0.5 rounded text-[10px] bg-card text-muted hover:text-main border border-border cursor-pointer"
-                      >
-                        Nie
-                      </button>
+                {/* Subagents Nested Tree */}
+                {isActive && subagents && subagents.length > 0 && (
+                  <div className="ml-5 pl-2.5 border-l border-primary/30 my-1 space-y-1">
+                    <div className="text-[10px] font-semibold text-primary/80 flex items-center gap-1 py-0.5 uppercase tracking-wider">
+                      <Users className="w-3 h-3" />
+                      <span>Podsesje ({subagents.length})</span>
                     </div>
-                  ) : (
-                    <button
-                      type="button"
-                      title="Usuń to zadanie"
-                      onClick={() => setConfirmDeleteId(session.id)}
-                      className="p-1 rounded-md text-subtle opacity-0 group-hover:opacity-100 hover:text-rose-500 hover:bg-surface transition-all cursor-pointer"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-              </div>
+                    {subagents.map((sub) => (
+                      <div
+                        key={sub.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSelectSubagent?.(sub.id);
+                          onCloseMobile();
+                        }}
+                        className="flex items-center justify-between gap-1.5 px-2 py-1 rounded-lg text-[11px] hover:bg-surface-hover transition-colors cursor-pointer text-muted hover:text-main"
+                      >
+                        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                          <Bot className="w-3 h-3 text-primary shrink-0" />
+                          <span className="truncate">{sub.role}</span>
+                        </div>
+                        <span
+                          className={`text-[9px] px-1 py-0.2 rounded font-mono shrink-0 ${
+                            sub.state === 'completed'
+                              ? 'bg-emerald-500/15 text-emerald-500'
+                              : sub.state === 'running'
+                              ? 'bg-amber-500/15 text-amber-500 animate-pulse'
+                              : sub.state === 'errored'
+                              ? 'bg-rose-500/15 text-rose-500'
+                              : 'bg-neutral-500/15 text-neutral-400'
+                          }`}
+                        >
+                          {sub.state === 'completed'
+                            ? '✓'
+                            : sub.state === 'running'
+                            ? '...'
+                            : sub.state === 'errored'
+                            ? '✕'
+                            : '•'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </React.Fragment>
             );
           })}
         </div>

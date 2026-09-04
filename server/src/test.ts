@@ -1,4 +1,6 @@
 import assert from 'node:assert';
+import fs from 'node:fs';
+import path from 'node:path';
 import { buildServer } from './index.js';
 import { runSeed } from './db/seed.js';
 import { getExpectedToken } from './security/authGuard.js';
@@ -159,6 +161,93 @@ async function runTests() {
   assert(lastMsg.content.includes('Available Slash Commands'));
   console.log('  ✓ Slash command intercepted and persisted without external process\n');
 
+  // Test 10b: Attachment ingestion via POST /prompt with dataUrl & path traversal sanitization
+  console.log('Test 10b: POST /api/sessions/:id/prompt with Attachment dataUrl ingestion');
+  const sampleText = 'Antigravity attachment test content 12345';
+  const base64Data = Buffer.from(sampleText, 'utf-8').toString('base64');
+  const dataUrl = `data:text/plain;base64,${base64Data}`;
+
+  const resPromptWithAtt = await server.inject({
+    method: 'POST',
+    url: `/api/sessions/${createdSession.id}/prompt`,
+    headers: authHeaders,
+    payload: {
+      prompt: '/help',
+      attachments: [
+        {
+          id: 'att-test-01',
+          name: '../../unsafe-test-file.txt',
+          mimeType: 'text/plain',
+          size: sampleText.length,
+          dataUrl,
+        },
+      ],
+    },
+  });
+  assert.strictEqual(resPromptWithAtt.statusCode, 202);
+
+  // Verify attachment file written to .antigravity/attachments safely without traversal
+  const attachmentsDir = path.join(createdSession.workspace_path, '.antigravity', 'attachments');
+  assert(fs.existsSync(attachmentsDir), '.antigravity/attachments directory must exist');
+  const files = fs.readdirSync(attachmentsDir);
+  const writtenFile = files.find((f) => f.includes('unsafe-test-file.txt'));
+  assert(writtenFile, 'Attachment file must be saved with sanitized filename');
+  assert(!writtenFile.includes('..'), 'Filename must not contain path traversal');
+  const savedContent = fs.readFileSync(path.join(attachmentsDir, writtenFile), 'utf-8');
+  assert.strictEqual(savedContent, sampleText);
+  // Clean up test file
+  fs.unlinkSync(path.join(attachmentsDir, writtenFile));
+  console.log('  ✓ Attachment successfully ingested, sanitized and persisted to disk\n');
+
+  // Test 10c: POST /api/sessions/:id/prompt with invalid attachment schema rejected
+  console.log('Test 10c: POST /api/sessions/:id/prompt with invalid attachment schema');
+  const resBadAtt = await server.inject({
+    method: 'POST',
+    url: `/api/sessions/${createdSession.id}/prompt`,
+    headers: authHeaders,
+    payload: {
+      prompt: 'Invalid attachment',
+      attachments: [
+        {
+          id: 'bad-att',
+          // missing name, mimeType, size
+        },
+      ],
+    },
+  });
+  assert.strictEqual(resBadAtt.statusCode, 400);
+  console.log('  ✓ Invalid attachment schema correctly rejected (400)\n');
+
+  // Test 10d: Fastify bodyLimit handles large payload (e.g. 2MB binary -> ~2.7MB base64)
+  console.log('Test 10d: Fastify bodyLimit handles large payload without 413');
+  const largeBuffer = Buffer.alloc(2 * 1024 * 1024, 'a');
+  const largeDataUrl = `data:application/octet-stream;base64,${largeBuffer.toString('base64')}`;
+  const resLargePrompt = await server.inject({
+    method: 'POST',
+    url: `/api/sessions/${createdSession.id}/prompt`,
+    headers: authHeaders,
+    payload: {
+      prompt: '/help',
+      attachments: [
+        {
+          id: 'large-att',
+          name: 'large_image.png',
+          mimeType: 'application/octet-stream',
+          size: largeBuffer.length,
+          dataUrl: largeDataUrl,
+        },
+      ],
+    },
+  });
+  assert.strictEqual(resLargePrompt.statusCode, 202);
+  // Clean up large test file
+  const filesAfterLarge = fs.readdirSync(attachmentsDir);
+  const largeWritten = filesAfterLarge.find((f) => f.includes('large_image.png'));
+  if (largeWritten) {
+    fs.unlinkSync(path.join(attachmentsDir, largeWritten));
+  }
+  console.log('  ✓ Large payload accepted successfully without 413\n');
+
   // Test 11: Workspace Security - Directory Traversal blocked
   console.log('Test 11: Workspace Security - Directory Traversal');
   const resTraversal = await server.inject({
@@ -190,6 +279,18 @@ async function runTests() {
   const treeData = JSON.parse(resTree.payload);
   assert(Array.isArray(treeData.tree));
   console.log(`  ✓ Workspace tree retrieved (${treeData.tree.length} top-level nodes)\n`);
+
+  // Test 13b: GET /api/sessions/:id/subagents
+  console.log('Test 13b: GET /api/sessions/:id/subagents');
+  const resSubagents = await server.inject({
+    method: 'GET',
+    url: `/api/sessions/${createdSession.id}/subagents`,
+    headers: authHeaders,
+  });
+  assert.strictEqual(resSubagents.statusCode, 200);
+  const subData = JSON.parse(resSubagents.payload);
+  assert(Array.isArray(subData.subagents));
+  console.log(`  ✓ Subagents retrieved: ${subData.subagents.length} subagents\n`);
 
   // Test 14: DELETE /api/sessions/:id
   console.log('Test 14: DELETE /api/sessions/:id');

@@ -7,13 +7,15 @@ import {
   Minimize2,
   RefreshCw,
   Sparkles,
+  Users,
   X,
 } from 'lucide-react';
-import { Artifact, FileDiff, InspectorTab } from '@/types';
+import { Artifact, FileDiff, InspectorTab, SubagentSession } from '@/types';
 import { api } from '@/services/api';
 import { DiffViewer } from './DiffViewer';
 import { FileTreeViewer } from './FileTreeViewer';
 import { ArtifactViewer } from './ArtifactViewer';
+import { SubagentViewer } from './SubagentViewer';
 import { useWorkspaceTree } from '@/hooks/useWorkspaceTree';
 import { useResizable } from '@/hooks/useResizable';
 import { ResizeHandle } from './ResizeHandle';
@@ -28,6 +30,10 @@ interface InspectorProps {
   highlightFilePath?: string | null;
   workspacePath?: string;
   onDiffsCountChange?: (count: number) => void;
+  sessionId?: string | null;
+  subagents?: SubagentSession[];
+  selectedSubagentId?: string | null;
+  onRefreshSubagents?: () => void;
 }
 
 export const Inspector: React.FC<InspectorProps> = ({
@@ -40,6 +46,10 @@ export const Inspector: React.FC<InspectorProps> = ({
   highlightFilePath,
   workspacePath,
   onDiffsCountChange,
+  sessionId,
+  subagents = [],
+  selectedSubagentId,
+  onRefreshSubagents,
 }) => {
   const [currentTab, setCurrentTab] = useState<InspectorTab>(activeTab);
   const [selectedDiffPath, setSelectedDiffPath] = useState<string | null>(null);
@@ -255,6 +265,24 @@ export const Inspector: React.FC<InspectorProps> = ({
               </span>
             )}
           </button>
+
+          <button
+            type="button"
+            onClick={() => handleTabSelect('subagents')}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+              currentTab === 'subagents'
+                ? 'bg-primary/10 text-primary'
+                : 'text-muted hover:text-main hover:bg-surface-hover'
+            }`}
+          >
+            <Users className="w-3.5 h-3.5" />
+            <span>Podsesje</span>
+            {subagents.length > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-primary/20 text-primary font-mono">
+                {subagents.length}
+              </span>
+            )}
+          </button>
         </div>
 
         <div className="flex items-center gap-1">
@@ -378,6 +406,15 @@ export const Inspector: React.FC<InspectorProps> = ({
         )}
 
         {currentTab === 'artifacts' && <ArtifactViewer artifacts={artifacts} />}
+
+        {currentTab === 'subagents' && (
+          <SubagentViewer
+            sessionId={sessionId || ''}
+            subagents={subagents}
+            selectedSubagentId={selectedSubagentId}
+            onRefresh={onRefreshSubagents}
+          />
+        )}
       </div>
     </aside>
   );

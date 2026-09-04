@@ -95,3 +95,13 @@ export function formatEffortLabel(effort: string): string {
       return 'Zrównoważony';
   }
 }
+
+export function formatFileSize(bytes?: number): string {
+  if (!bytes || bytes <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  if (i === 0) return `${bytes} B`;
+  const val = bytes / Math.pow(1024, i);
+  return `${val >= 10 || i === 1 ? Math.round(val) : val.toFixed(1)} ${units[i]}`;
+}
+

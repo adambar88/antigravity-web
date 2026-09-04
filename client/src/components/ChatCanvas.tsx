@@ -1,14 +1,35 @@
 import React from 'react';
 import {
   Bot,
+  ExternalLink,
+  File,
+  FileCode,
+  FileText,
   User,
 } from 'lucide-react';
 import { Message, ToolExecution } from '@/types';
+import { formatFileSize } from '@/utils/formatters';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { ThinkingBlock } from './ThinkingBlock';
 import { ToolExecutionCard } from './ToolExecutionCard';
 import { ScrollAnchorBadge } from './ScrollAnchorBadge';
 import { ThinkingState } from '@/hooks/useSessionStream';
+
+function getFileIcon(name: string, mimeType: string) {
+  const ext = name.split('.').pop()?.toLowerCase() || '';
+  if (
+    [
+      'ts', 'tsx', 'js', 'jsx', 'json', 'py', 'rs', 'go', 'html', 'css',
+      'scss', 'sh', 'sql', 'yaml', 'yml', 'c', 'cpp', 'h', 'java',
+    ].includes(ext)
+  ) {
+    return <FileCode className="w-4 h-4 text-emerald-500" />;
+  }
+  if (['md', 'txt', 'rtf', 'doc', 'docx', 'pdf'].includes(ext) || mimeType.startsWith('text/')) {
+    return <FileText className="w-4 h-4 text-blue-500" />;
+  }
+  return <File className="w-4 h-4 text-amber-500" />;
+}
 
 interface ChatCanvasProps {
   messages: Message[];
@@ -23,6 +44,7 @@ interface ChatCanvasProps {
   onAbort?: () => void;
   onQuickPrompt?: (text: string) => void;
   onViewDiff?: (filePath: string) => void;
+  onOpenSubagents?: () => void;
 }
 
 export const ChatCanvas: React.FC<ChatCanvasProps> = ({
@@ -37,6 +59,7 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
   onScrollToBottom,
   onQuickPrompt,
   onViewDiff,
+  onOpenSubagents,
 }) => {
   const quickSuggestions = [
     { title: 'Opracuj plan wdrożenia', text: '/plan Przygotuj plan implementacji nowych funkcjonalności' },
@@ -91,10 +114,86 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
           <>
             {messages.map((msg) => {
               if (msg.role === 'user') {
+                const hasAttachments = Boolean(msg.attachments && msg.attachments.length > 0);
+                const imageAttachments = msg.attachments?.filter((a) => a.mimeType.startsWith('image/')) || [];
+                const otherAttachments = msg.attachments?.filter((a) => !a.mimeType.startsWith('image/')) || [];
+
                 return (
                   <div key={msg.id} className="flex items-start gap-3 w-full max-w-4xl xl:max-w-5xl 2xl:max-w-6xl ml-auto justify-end">
-                    <div className="p-4 rounded-2xl bg-card border border-border text-main shadow-xs max-w-2xl xl:max-w-3xl break-words">
-                      <MarkdownRenderer content={msg.content} />
+                    <div className="p-4 rounded-2xl bg-card border border-border text-main shadow-xs max-w-2xl xl:max-w-3xl break-words space-y-3">
+                      {/* Attachments rendering */}
+                      {hasAttachments && (
+                        <div className="space-y-2">
+                          {/* Image attachments grid */}
+                          {imageAttachments.length > 0 && (
+                            <div className={`grid gap-2 ${imageAttachments.length > 1 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
+                              {imageAttachments.map((img) => (
+                                <div key={img.id} className="relative group overflow-hidden rounded-xl border border-border/80 bg-black/5">
+                                  {img.dataUrl ? (
+                                    <a
+                                      href={img.dataUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="block cursor-zoom-in"
+                                      title="Kliknij, aby otworzyć w pełnym rozmiarze"
+                                    >
+                                      <img
+                                        src={img.dataUrl}
+                                        alt={img.name}
+                                        className="max-h-72 sm:max-h-80 w-full object-contain rounded-xl transition-transform group-hover:scale-[1.01]"
+                                        loading="lazy"
+                                      />
+                                    </a>
+                                  ) : null}
+                                  <div className="absolute bottom-0 inset-x-0 bg-black/60 backdrop-blur-xs px-2.5 py-1 text-[11px] text-white/90 truncate flex items-center justify-between">
+                                    <span className="truncate mr-2">{img.name}</span>
+                                    <span className="text-[10px] text-white/70 shrink-0">{formatFileSize(img.size)}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Non-image attachments */}
+                          {otherAttachments.length > 0 && (
+                            <div className="flex flex-wrap gap-2">
+                              {otherAttachments.map((file) => (
+                                <div
+                                  key={file.id}
+                                  className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-surface border border-border/70 text-xs text-main shadow-2xs"
+                                >
+                                  <div className="shrink-0">
+                                    {getFileIcon(file.name, file.mimeType)}
+                                  </div>
+                                  <span className="font-medium truncate max-w-[180px] sm:max-w-[240px]" title={file.name}>
+                                    {file.name}
+                                  </span>
+                                  <span className="text-[10px] text-muted shrink-0">
+                                    {formatFileSize(file.size)}
+                                  </span>
+                                  {file.dataUrl && (
+                                    <a
+                                      href={file.dataUrl}
+                                      download={file.name}
+                                      className="text-muted hover:text-primary transition-colors p-1"
+                                      title={`Pobierz ${file.name}`}
+                                    >
+                                      <ExternalLink className="w-3 h-3" />
+                                    </a>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Text content */}
+                      {msg.content && (
+                        <div>
+                          <MarkdownRenderer content={msg.content} />
+                        </div>
+                      )}
                     </div>
                     <div className="w-8 h-8 rounded-xl bg-surface border border-border flex items-center justify-center text-muted shrink-0 mt-0.5">
                       <User className="w-4 h-4" />
@@ -136,6 +235,7 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
                             key={tool.id}
                             tool={tool}
                             onViewDiff={onViewDiff}
+                            onOpenSubagents={onOpenSubagents}
                           />
                         ))}
                       </div>
@@ -177,6 +277,7 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
                           key={tool.id}
                           tool={tool}
                           onViewDiff={onViewDiff}
+                          onOpenSubagents={onOpenSubagents}
                         />
                       ))}
                     </div>
