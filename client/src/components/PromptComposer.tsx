@@ -71,6 +71,8 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
   const [showEffortMenu, setShowEffortMenu] = useState(false);
   const [showModelMenu, setShowModelMenu] = useState(false);
 
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
   const [isManualHeight, setIsManualHeight] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       return Boolean(localStorage.getItem('ag_composer_height_manual'));
@@ -83,8 +85,6 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
     isDragging: isDraggingHeight,
     resetSize: resetComposerHeight,
     handlePointerDown: handleHeightDown,
-    handlePointerMove: handleHeightMove,
-    handlePointerUp: handleHeightUp,
   } = useResizable({
     initialSize: 120,
     minSize: 44,
@@ -92,6 +92,12 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
     direction: 'vertical',
     reverse: true, // Dragging up increases height
     storageKey: 'ag_composer_height',
+    getCurrentSize: () => {
+      if (textareaRef.current) {
+        return textareaRef.current.getBoundingClientRect().height;
+      }
+      return 44;
+    },
     onResize: () => {
       setIsManualHeight(true);
       if (typeof window !== 'undefined') {
@@ -110,8 +116,6 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
       textareaRef.current.style.height = 'auto';
     }
   };
-
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   // Auto-resize textarea
   const adjustHeight = () => {
@@ -292,20 +296,16 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
 
       {/* Main composer box: clean textarea + discreet bottom bar */}
       <div className="flex flex-col rounded-2xl border border-border bg-surface shadow-md focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-all relative">
-        {/* Top Resize Handle Bar */}
-        <div className="w-full flex justify-center pt-1.5 pb-0.5 cursor-row-resize touch-none select-none">
-          <ResizeHandle
-            direction="vertical"
-            showPill={true}
-            isDragging={isDraggingHeight}
-            onPointerDown={handleHeightDown}
-            onPointerMove={handleHeightMove}
-            onPointerUp={handleHeightUp}
-            onDoubleClick={handleResetHeight}
-            title="Przeciągnij w górę, aby powiększyć pole pisania (podwójne kliknięcie: auto)"
-            className="w-full h-3"
-          />
-        </div>
+        {/* Top Resize Handle Bar (generous touch hit target) */}
+        <ResizeHandle
+          direction="vertical"
+          showPill={true}
+          isDragging={isDraggingHeight}
+          onPointerDown={handleHeightDown}
+          onDoubleClick={handleResetHeight}
+          title="Przeciągnij w górę, aby powiększyć pole pisania (podwójne kliknięcie: auto)"
+          className="w-full h-8 pt-1.5 pb-1 cursor-row-resize"
+        />
 
         {/* Unobstructed typing area */}
         <textarea
@@ -318,7 +318,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
           rows={1}
           disabled={disabled}
           style={isManualHeight ? { height: `${composerHeight}px`, maxHeight: 'none' } : undefined}
-          className="w-full resize-none bg-transparent px-3.5 pt-1.5 pb-1 text-sm text-main placeholder:text-muted focus:outline-hidden min-h-[44px]"
+          className="w-full resize-none bg-transparent px-3.5 pt-0.5 pb-1 text-sm text-main placeholder:text-muted focus:outline-hidden min-h-[44px]"
         />
 
         {/* Discreet bottom action bar */}
