@@ -147,6 +147,22 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
       }
     }
 
+    const isMobileDevice =
+      typeof window !== 'undefined' &&
+      (window.matchMedia('(max-width: 768px)').matches ||
+        window.matchMedia('(pointer: coarse)').matches);
+
+    // On mobile devices: Enter inserts a new line (default behavior).
+    // Sending is handled by tapping the Send button (↑) or pressing Ctrl/Cmd+Enter with an external keyboard.
+    if (isMobileDevice) {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        handleSubmit();
+      }
+      return;
+    }
+
+    // On desktop: Enter sends, Shift+Enter inserts a new line.
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
@@ -236,6 +252,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
           value={text}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
+          enterKeyHint="enter"
           placeholder="Napisz wiadomość lub wpisz / aby wybrać polecenie..."
           rows={1}
           disabled={disabled}
