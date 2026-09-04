@@ -55,7 +55,7 @@ export const NewSessionModal: React.FC<NewSessionModalProps> = ({
   const [selectedModel, setSelectedModel] = useState('gemini-3.8-flash-medium');
   const [effort, setEffort] = useState<ReasoningEffort>('medium');
   const [availableDirs, setAvailableDirs] = useState<{ name: string; path: string }[]>([]);
-  const [showFolderTree, setShowFolderTree] = useState(false);
+  const [showFolderTree, setShowFolderTree] = useState(true);
 
   useEffect(() => {
     if (isOpen) {
@@ -186,23 +186,28 @@ export const NewSessionModal: React.FC<NewSessionModalProps> = ({
                 })}
               </div>
 
-              {/* Collapsible Folder Tree */}
-              <div className="pt-1">
-                <button
-                  type="button"
-                  onClick={() => setShowFolderTree(!showFolderTree)}
-                  className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline font-medium cursor-pointer"
-                >
-                  <FolderTree className="w-3.5 h-3.5" />
-                  <span>{showFolderTree ? 'Ukryj drzewo folderów' : 'Wybierz z drzewa folderów'}</span>
-                  {showFolderTree ? (
-                    <ChevronUp className="w-3 h-3" />
-                  ) : (
-                    <ChevronDown className="w-3 h-3" />
-                  )}
-                </button>
+              {/* Interactive Folder Tree */}
+              <div className="pt-2">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[11px] font-semibold text-main flex items-center gap-1.5">
+                    <FolderTree className="w-3.5 h-3.5 text-primary" />
+                    Wybierz z drzewa folderów
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowFolderTree(!showFolderTree)}
+                    className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline font-medium cursor-pointer"
+                  >
+                    <span>{showFolderTree ? 'Zwiń drzewo' : 'Rozwiń drzewo'}</span>
+                    {showFolderTree ? (
+                      <ChevronUp className="w-3 h-3" />
+                    ) : (
+                      <ChevronDown className="w-3 h-3" />
+                    )}
+                  </button>
+                </div>
                 {showFolderTree && (
-                  <div className="mt-2 animate-in fade-in duration-150">
+                  <div className="animate-in fade-in duration-150">
                     <FolderTreePicker
                       selectedPath={workspacePath}
                       onSelectPath={(p) => setWorkspacePath(p)}

@@ -34,6 +34,7 @@ interface InspectorProps {
   subagents?: SubagentSession[];
   selectedSubagentId?: string | null;
   onRefreshSubagents?: () => void;
+  isGenerating?: boolean;
 }
 
 export const Inspector: React.FC<InspectorProps> = ({
@@ -50,6 +51,7 @@ export const Inspector: React.FC<InspectorProps> = ({
   subagents = [],
   selectedSubagentId,
   onRefreshSubagents,
+  isGenerating = false,
 }) => {
   const [currentTab, setCurrentTab] = useState<InspectorTab>(activeTab);
   const [selectedDiffPath, setSelectedDiffPath] = useState<string | null>(null);
@@ -167,7 +169,12 @@ export const Inspector: React.FC<InspectorProps> = ({
     }
   }, [highlightFilePath]);
 
-  const workspaceTree = useWorkspaceTree(workspacePath);
+  const workspaceTree = useWorkspaceTree({
+    workspacePath,
+    isOpen,
+    activeTab: currentTab,
+    isGenerating,
+  });
 
   const handleTabSelect = (tab: InspectorTab) => {
     setCurrentTab(tab);

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { WorkspaceFileResponse, WorkspaceTreeNode } from '@/types';
 import { api } from '@/services/api';
 
@@ -21,7 +21,21 @@ function updateNodeChildren(
   });
 }
 
-export function useWorkspaceTree(workspacePath?: string) {
+interface UseWorkspaceTreeOptions {
+  workspacePath?: string;
+  isOpen?: boolean;
+  activeTab?: string;
+  isGenerating?: boolean;
+}
+
+export function useWorkspaceTree(optionsOrPath?: string | UseWorkspaceTreeOptions) {
+  const options: UseWorkspaceTreeOptions =
+    typeof optionsOrPath === 'string'
+      ? { workspacePath: optionsOrPath }
+      : optionsOrPath || {};
+
+  const { workspacePath, isOpen = true, activeTab, isGenerating = false } = options;
+
   const [tree, setTree] = useState<WorkspaceTreeNode[]>([]);
   const [rootPath, setRootPath] = useState<string>(workspacePath || '/home/adam');
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
@@ -65,9 +79,47 @@ export function useWorkspaceTree(workspacePath?: string) {
     await fetchTree();
   }, [fetchTree]);
 
+  // Initial fetch and on workspacePath change
   useEffect(() => {
     fetchTree(workspacePath);
   }, [workspacePath, fetchTree]);
+
+  // Auto-refresh when tab switches to 'files' or inspector is opened on 'files'
+  const isFilesTabActive = isOpen && (!activeTab || activeTab === 'files');
+  useEffect(() => {
+    if (isFilesTabActive) {
+      fetchTree(workspacePath);
+    }
+  }, [isFilesTabActive, workspacePath, fetchTree]);
+
+  // Auto-refresh when generation finishes (e.g. after tool execution finishes creating/deleting files)
+  const prevGeneratingRef = useRef(isGenerating);
+  useEffect(() => {
+    if (prevGeneratingRef.current && !isGenerating && isFilesTabActive) {
+      fetchTree(workspacePath);
+    }
+    prevGeneratingRef.current = isGenerating;
+  }, [isGenerating, isFilesTabActive, workspacePath, fetchTree]);
+
+  // Auto-refresh when browser window regains focus
+  useEffect(() => {
+    const handleFocus = () => {
+      if (isFilesTabActive) {
+        fetchTree(workspacePath);
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [isFilesTabActive, workspacePath, fetchTree]);
+
+  // Periodic background refresh every 10s when user is in the Files tab
+  useEffect(() => {
+    if (!isFilesTabActive) return;
+    const interval = setInterval(() => {
+      fetchTree(workspacePath);
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [isFilesTabActive, workspacePath, fetchTree]);
 
   const toggleFolder = useCallback(async (folderPath: string) => {
     setExpandedFolders((prev) => {
