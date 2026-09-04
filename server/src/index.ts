@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import dotenv from 'dotenv';
 
 import { getDatabase } from './db/index.js';
+import { syncExistingHistoricalArtifacts } from './agent/artifactSync.js';
 import { authGuard } from './security/authGuard.js';
 import { healthRoutes } from './routes/health.js';
 import { authRoutes } from './routes/auth.js';
@@ -26,8 +27,9 @@ export async function buildServer() {
     },
   });
 
-  // 1. Initialize SQLite Database
+  // 1. Initialize SQLite Database and sync historical plan artifacts
   getDatabase();
+  syncExistingHistoricalArtifacts();
 
   // 2. CORS plugin
   await server.register(cors, {

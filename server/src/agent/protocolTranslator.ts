@@ -11,6 +11,11 @@ import {
   updateMessage,
   getDatabase,
 } from '../db/index.js';
+import {
+  createPlanArtifact,
+  handleToolArtifact,
+  syncBrainDirArtifacts,
+} from './artifactSync.js';
 import type {
   SSEEventType,
   SSEEventEnvelope,
@@ -531,6 +536,11 @@ export async function runAgentTurn(options: RunAgentTurnOptions): Promise<void> 
             sessionEventHub.broadcast(sessionId, 'diff_created', diffPayload);
           }
 
+          // Check for artifact creation from file write tools
+          handleToolArtifact(sessionId, toolName, toolArgs, (art) => {
+            sessionEventHub.broadcast(sessionId, 'artifact_created', art);
+          });
+
           // Persist tool execution
           try {
             updateToolExecution(sessionId, {
@@ -648,6 +658,17 @@ export async function runAgentTurn(options: RunAgentTurnOptions): Promise<void> 
       thought_duration_ms: thoughtDurationMs || null,
       status: exitResult.code === 0 ? 'completed' : 'failed',
     });
+
+    // Check if the turn produced a plan or documentation artifact
+    createPlanArtifact(sessionId, prompt, finalContent, (art) => {
+      sessionEventHub.broadcast(sessionId, 'artifact_created', art);
+    });
+
+    if (activeConversationId) {
+      syncBrainDirArtifacts(sessionId, activeConversationId, (art) => {
+        sessionEventHub.broadcast(sessionId, 'artifact_created', art);
+      });
+    }
 
     updateSessionStatus(sessionId, finalStatus);
     sessionEventHub.broadcast(sessionId, 'session_status', { status: finalStatus });

@@ -309,6 +309,15 @@ export function useSessionStream(sessionId: string | null) {
         break;
       }
 
+      case 'artifact_created':
+      case 'artifact_updated': {
+        const payload = envelope.payload as Artifact;
+        if (payload && payload.id) {
+          setArtifacts((prev) => [payload, ...prev.filter((a) => a.id !== payload.id)]);
+        }
+        break;
+      }
+
       case 'slash_command_result': {
         const payload = envelope.payload as SlashCommandResultPayload;
         const sysMsg: Message = {

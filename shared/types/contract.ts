@@ -65,12 +65,14 @@ export interface FileDiff {
   created_at: number; // ms
 }
 
+export type ArtifactType = 'plan' | 'document' | 'markdown' | 'diff' | 'diagram' | 'code' | 'table';
+
 export interface Artifact {
   id: string;
   session_id: string;
   identifier: string;
   title: string;
-  type: 'markdown' | 'diff' | 'diagram' | 'code' | 'table';
+  type: ArtifactType;
   content: string;
   file_path?: string | null;
   created_at: number; // ms
@@ -171,6 +173,8 @@ export type SSEEventType =
   | 'tool_progress'
   | 'tool_complete'
   | 'diff_created'
+  | 'artifact_created'
+  | 'artifact_updated'
   | 'slash_command_result'
   | 'turn_error'
   | 'heartbeat';

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Check,
   Copy,
@@ -6,6 +6,7 @@ import {
   FileText,
   GitBranch,
   Layers,
+  ListTodo,
   Sparkles,
 } from 'lucide-react';
 import { Artifact } from '@/types';
@@ -22,7 +23,13 @@ export const ArtifactViewer: React.FC<ArtifactViewerProps> = ({ artifacts }) => 
   );
   const [copied, setCopied] = useState(false);
 
-  // Auto-select first if none selected
+  // Auto-select first or update when artifacts arrive
+  useEffect(() => {
+    if ((!selectedId || !artifacts.find((a) => a.id === selectedId)) && artifacts.length > 0) {
+      setSelectedId(artifacts[0].id);
+    }
+  }, [artifacts, selectedId]);
+
   const activeArtifact = artifacts.find((a) => a.id === selectedId) || artifacts[0] || null;
 
   const handleCopy = () => {
@@ -34,6 +41,8 @@ export const ArtifactViewer: React.FC<ArtifactViewerProps> = ({ artifacts }) => 
 
   const getArtifactIcon = (type: string) => {
     switch (type) {
+      case 'plan':
+        return <ListTodo className="w-4 h-4 text-primary" />;
       case 'diagram':
         return <GitBranch className="w-4 h-4 text-purple-500" />;
       case 'table':
