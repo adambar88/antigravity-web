@@ -67,7 +67,14 @@ export const Header: React.FC<HeaderProps> = ({
         return (
           <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            <span>Połączono</span>
+            <span>Połączono z Antigravity</span>
+          </div>
+        );
+      case 'connecting':
+        return (
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-amber-500/10 text-amber-600 border border-amber-500/20">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+            <span>Łączenie...</span>
           </div>
         );
       case 'disconnected':
@@ -75,7 +82,7 @@ export const Header: React.FC<HeaderProps> = ({
         return (
           <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-neutral-500/10 text-neutral-500 border border-neutral-500/20">
             <span className="w-1.5 h-1.5 rounded-full bg-neutral-400" />
-            <span>Rozłączono</span>
+            <span>Gotowy</span>
           </div>
         );
     }

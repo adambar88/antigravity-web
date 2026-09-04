@@ -14,8 +14,27 @@ export function useSessions() {
     try {
       const data = await api.getSessions();
       setSessions(data);
-      if (data.length > 0 && !activeSessionId) {
-        setActiveSessionId(data[0].id);
+      if (data.length > 0) {
+        setActiveSessionId((curr) => curr || data[0].id);
+      } else {
+        try {
+          const initial = await api.createSession({
+            title: 'Nowe zadanie',
+            workspace_path: '/home/adam/projects/my-domain',
+            model: 'gemini-3.8-flash-medium',
+            effort: 'medium',
+          });
+          const summary: SessionSummary = {
+            ...initial,
+            message_count: 0,
+            tool_count: 0,
+            last_message_preview: undefined,
+          };
+          setSessions([summary]);
+          setActiveSessionId(initial.id);
+        } catch (createErr) {
+          console.warn('Nie udało się utworzyć początkowej sesji:', createErr);
+        }
       }
     } catch (err) {
       console.warn('Błąd podczas pobierania sesji:', err);

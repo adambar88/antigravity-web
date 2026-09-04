@@ -4,7 +4,7 @@
 
 import { SSEEventEnvelope, SSEEventType } from '@/types';
 
-export type SSEConnectionStatus = 'connected' | 'streaming' | 'disconnected';
+export type SSEConnectionStatus = 'connected' | 'streaming' | 'connecting' | 'disconnected';
 
 export interface SSEClientOptions {
   sessionId: string;
@@ -52,6 +52,7 @@ export class SessionSSEClient {
     this.cleanup();
 
     try {
+      this.onStatusChange('connecting');
       const base = import.meta.env.BASE_URL || '/';
       const apiBase = (base.endsWith('/') ? base : `${base}/`) + 'api';
       const url = `${apiBase}/sessions/${this.sessionId}/stream`;
