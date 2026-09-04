@@ -2,66 +2,38 @@ import { useCallback, useEffect, useState } from 'react';
 import { WorkspaceFileResponse, WorkspaceTreeNode } from '@/types';
 import { api } from '@/services/api';
 
-export function useWorkspaceTree() {
+export function useWorkspaceTree(workspacePath?: string) {
   const [tree, setTree] = useState<WorkspaceTreeNode[]>([]);
-  const [rootPath, setRootPath] = useState<string>('');
+  const [rootPath, setRootPath] = useState<string>(workspacePath || '/home/adam');
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
   const [selectedFileContent, setSelectedFileContent] = useState<WorkspaceFileResponse | null>(null);
   const [isLoadingTree, setIsLoadingTree] = useState(false);
   const [isLoadingFile, setIsLoadingFile] = useState(false);
-  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['client', 'src', 'server']));
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
 
-  const fetchTree = useCallback(async () => {
+  useEffect(() => {
+    if (workspacePath) {
+      setRootPath(workspacePath);
+    }
+  }, [workspacePath]);
+
+  const fetchTree = useCallback(async (targetRoot?: string) => {
+    const activeRoot = targetRoot || rootPath || workspacePath || '/home/adam';
     setIsLoadingTree(true);
     try {
-      const res = await api.getWorkspaceTree();
+      const res = await api.getWorkspaceTree(activeRoot, 3);
       setTree(res.tree || []);
-      setRootPath(res.root || '');
+      setRootPath(res.root || activeRoot);
     } catch (err) {
       console.warn('Nie udało się pobrać drzewa projektu:', err);
-      // Fallback mock tree for UI testing
-      setTree([
-        {
-          name: 'client',
-          path: 'client',
-          type: 'directory',
-          children: [
-            {
-              name: 'src',
-              path: 'client/src',
-              type: 'directory',
-              children: [
-                { name: 'App.tsx', path: 'client/src/App.tsx', type: 'file' },
-                { name: 'main.tsx', path: 'client/src/main.tsx', type: 'file' },
-                { name: 'index.css', path: 'client/src/index.css', type: 'file' },
-              ],
-            },
-            { name: 'package.json', path: 'client/package.json', type: 'file' },
-            { name: 'vite.config.ts', path: 'client/vite.config.ts', type: 'file' },
-          ],
-        },
-        {
-          name: 'shared',
-          path: 'shared',
-          type: 'directory',
-          children: [
-            {
-              name: 'types',
-              path: 'shared/types',
-              type: 'directory',
-              children: [{ name: 'contract.ts', path: 'shared/types/contract.ts', type: 'file' }],
-            },
-          ],
-        },
-      ]);
     } finally {
       setIsLoadingTree(false);
     }
-  }, []);
+  }, [rootPath, workspacePath]);
 
   useEffect(() => {
-    fetchTree();
-  }, [fetchTree]);
+    fetchTree(workspacePath);
+  }, [workspacePath, fetchTree]);
 
   const toggleFolder = useCallback((folderPath: string) => {
     setExpandedFolders((prev) => {
@@ -79,7 +51,7 @@ export function useWorkspaceTree() {
     setSelectedFilePath(filePath);
     setIsLoadingFile(true);
     try {
-      const res = await api.getWorkspaceFile(filePath);
+      const res = await api.getWorkspaceFile(filePath, rootPath || workspacePath);
       setSelectedFileContent(res);
     } catch (err) {
       console.warn('Nie udało się pobrać pliku:', err);
@@ -92,7 +64,7 @@ export function useWorkspaceTree() {
     } finally {
       setIsLoadingFile(false);
     }
-  }, []);
+  }, [rootPath, workspacePath]);
 
   return {
     tree,

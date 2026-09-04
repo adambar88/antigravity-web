@@ -3,11 +3,29 @@ import {
   getWorkspaceTree,
   readWorkspaceFile,
   getDefaultWorkspaceRoot,
+  listWorkspaceDirectories,
   WorkspaceSecurityError,
 } from '../security/workspaceGuard.js';
 import type { WorkspaceTreeResponse, WorkspaceFileResponse } from '../types/contract.js';
 
 export const workspaceRoutes: FastifyPluginAsync = async (fastify) => {
+  // GET /api/workspace/directories
+  fastify.get<{
+    Querystring: { path?: string };
+  }>('/api/workspace/directories', async (req, reply) => {
+    const basePath = req.query.path || '/home/adam';
+    const dirs = await listWorkspaceDirectories(basePath);
+    return reply.status(200).send({
+      base: basePath,
+      directories: dirs,
+      common: [
+        { name: 'Katalog domowy (~/)', path: '/home/adam' },
+        { name: 'my-domain', path: '/home/adam/projects/my-domain' },
+        { name: 'minesweeper-repo', path: '/home/adam/projects/minesweeper-repo' },
+        { name: 'projects', path: '/home/adam/projects' },
+      ],
+    });
+  });
   // GET /api/workspace/tree
   fastify.get<{
     Querystring: { depth?: string; root?: string };

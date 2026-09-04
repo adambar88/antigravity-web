@@ -136,6 +136,17 @@ export function useSessions() {
     );
   }, []);
 
+  const updateSessionWorkspace = useCallback(async (id: string, workspace_path: string) => {
+    try {
+      await api.updateSession(id, { workspace_path });
+    } catch (err) {
+      console.warn('Błąd aktualizacji katalogu roboczego:', err);
+    }
+    setSessions((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, workspace_path, updated_at: Date.now() } : s))
+    );
+  }, []);
+
   return {
     sessions,
     activeSessionId,
@@ -143,6 +154,7 @@ export function useSessions() {
     createNewSession,
     deleteSession,
     updateSessionTitle,
+    updateSessionWorkspace,
     isLoading,
     error,
     refreshSessions: fetchSessions,

@@ -28,6 +28,7 @@ const CreateSessionSchema = z.object({
 
 const UpdateSessionSchema = z.object({
   title: z.string().optional(),
+  workspace_path: z.string().optional(),
   model: z.string().optional(),
   effort: z.enum(['low', 'medium', 'high']).optional(),
 });

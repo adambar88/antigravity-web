@@ -106,13 +106,33 @@ export const api = {
     return handleResponse<{ success: boolean }>(res);
   },
 
-  async getWorkspaceTree(): Promise<WorkspaceTreeResponse> {
-    const res = await fetch(`${BASE_URL}/workspace/tree`);
+  async getWorkspaceTree(root?: string, depth?: number): Promise<WorkspaceTreeResponse> {
+    const params = new URLSearchParams();
+    if (root) params.set('root', root);
+    if (depth) params.set('depth', depth.toString());
+    const query = params.toString() ? `?${params.toString()}` : '';
+    const res = await fetch(`${BASE_URL}/workspace/tree${query}`);
     return handleResponse<WorkspaceTreeResponse>(res);
   },
 
-  async getWorkspaceFile(filePath: string): Promise<WorkspaceFileResponse> {
-    const res = await fetch(`${BASE_URL}/workspace/file?path=${encodeURIComponent(filePath)}`);
+  async getWorkspaceFile(filePath: string, root?: string): Promise<WorkspaceFileResponse> {
+    const params = new URLSearchParams({ path: filePath });
+    if (root) params.set('root', root);
+    const res = await fetch(`${BASE_URL}/workspace/file?${params.toString()}`);
     return handleResponse<WorkspaceFileResponse>(res);
+  },
+
+  async getWorkspaceDirectories(path?: string): Promise<{
+    base: string;
+    directories: { path: string; name: string }[];
+    common: { path: string; name: string }[];
+  }> {
+    const params = path ? `?path=${encodeURIComponent(path)}` : '';
+    const res = await fetch(`${BASE_URL}/workspace/directories${params}`);
+    return handleResponse<{
+      base: string;
+      directories: { path: string; name: string }[];
+      common: { path: string; name: string }[];
+    }>(res);
   },
 };

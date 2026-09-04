@@ -17,6 +17,11 @@ export function getDefaultWorkspaceRoot(): string {
     return fs.realpathSync(envRoot);
   }
 
+  // Prioritize user home directory if mounted
+  if (fs.existsSync('/home/adam')) {
+    return '/home/adam';
+  }
+
   // Check parent project directory or current working directory
   const candidateParent = path.resolve(process.cwd(), '..');
   if (fs.existsSync(candidateParent)) {
@@ -24,6 +29,32 @@ export function getDefaultWorkspaceRoot(): string {
   }
 
   return fs.realpathSync(process.cwd());
+}
+
+export async function listWorkspaceDirectories(
+  basePath = '/home/adam'
+): Promise<{ path: string; name: string }[]> {
+  const targetDir = fs.existsSync(basePath) ? basePath : getDefaultWorkspaceRoot();
+  try {
+    const entries = await fs.promises.readdir(targetDir, { withFileTypes: true });
+    const dirs: { path: string; name: string }[] = [];
+    for (const entry of entries) {
+      if (
+        entry.isDirectory() &&
+        !entry.name.startsWith('.') &&
+        !IGNORED_DIRECTORIES.has(entry.name)
+      ) {
+        dirs.push({
+          name: entry.name,
+          path: path.join(targetDir, entry.name),
+        });
+      }
+    }
+    dirs.sort((a, b) => a.name.localeCompare(b.name));
+    return dirs;
+  } catch {
+    return [];
+  }
 }
 
 /**

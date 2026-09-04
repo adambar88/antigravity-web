@@ -10,6 +10,7 @@ import { PromptComposer } from '@/components/PromptComposer';
 import { Inspector } from '@/components/Inspector';
 import { MobileNavigation } from '@/components/MobileNavigation';
 import { ToastNotification } from '@/components/ToastNotification';
+import { NewSessionModal } from '@/components/NewSessionModal';
 import { ActiveTab, InspectorTab, ToastMessage } from '@/types';
 
 export default function App() {
@@ -22,6 +23,7 @@ export default function App() {
     createNewSession,
     deleteSession,
     updateSessionTitle,
+    updateSessionWorkspace,
   } = useSessions();
 
   const {
@@ -58,6 +60,7 @@ export default function App() {
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>('diffs');
   const [mobileTab, setMobileTab] = useState<ActiveTab>('chat');
   const [highlightDiffPath, setHighlightDiffPath] = useState<string | null>(null);
+  const [isNewSessionModalOpen, setIsNewSessionModalOpen] = useState(false);
 
   // Toasts
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -99,8 +102,11 @@ export default function App() {
       setInspectorTab('files');
       setIsInspectorOpen(true);
       setIsSidebarMobileOpen(false);
+    } else if (tab === 'artifacts') {
+      setInspectorTab('artifacts');
+      setIsInspectorOpen(true);
+      setIsSidebarMobileOpen(false);
     } else {
-      // chat
       setIsInspectorOpen(false);
       setIsSidebarMobileOpen(false);
     }
@@ -114,7 +120,7 @@ export default function App() {
   const activeWorkspacePath =
     session?.workspace_path ||
     sessions.find((s) => s.id === activeSessionId)?.workspace_path ||
-    '/home/adam/projects/my-domain';
+    '/home/adam';
 
   return (
     <div className="flex h-screen h-dvh w-screen overflow-hidden bg-app text-main">
@@ -128,8 +134,7 @@ export default function App() {
           setMobileTab('chat');
         }}
         onCreateSession={() => {
-          createNewSession();
-          addToast('success', 'Utworzono nowe zadanie');
+          setIsNewSessionModalOpen(true);
         }}
         onDeleteSession={(id) => {
           deleteSession(id);
@@ -154,6 +159,12 @@ export default function App() {
             if (activeSessionId) {
               updateSessionTitle(activeSessionId, newTitle);
               addToast('success', 'Zaktualizowano nazwę zadania');
+            }
+          }}
+          onUpdateWorkspace={(newPath) => {
+            if (activeSessionId) {
+              updateSessionWorkspace(activeSessionId, newPath);
+              addToast('success', `Zmieniono katalog roboczy na: ${newPath}`);
             }
           }}
           isInspectorOpen={isInspectorOpen}
@@ -209,6 +220,7 @@ export default function App() {
             activeTab={inspectorTab}
             onTabChange={(tab) => setInspectorTab(tab)}
             highlightFilePath={highlightDiffPath}
+            workspacePath={activeWorkspacePath}
           />
         </div>
 
@@ -219,6 +231,17 @@ export default function App() {
           diffsCount={diffs.length}
         />
       </div>
+
+      {/* New Session Modal with Workspace selection */}
+      <NewSessionModal
+        isOpen={isNewSessionModalOpen}
+        onClose={() => setIsNewSessionModalOpen(false)}
+        defaultWorkspacePath={activeWorkspacePath}
+        onSubmit={async (params) => {
+          await createNewSession(params);
+          addToast('success', `Utworzono zadanie w katalogu: ${params.workspace_path}`);
+        }}
+      />
 
       {/* Floating Polish Toast Notifications */}
       <ToastNotification toasts={toasts} onDismiss={removeToast} />

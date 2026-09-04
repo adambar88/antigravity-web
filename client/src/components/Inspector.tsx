@@ -20,6 +20,7 @@ interface InspectorProps {
   activeTab?: InspectorTab;
   onTabChange?: (tab: InspectorTab) => void;
   highlightFilePath?: string | null;
+  workspacePath?: string;
 }
 
 export const Inspector: React.FC<InspectorProps> = ({
@@ -30,6 +31,7 @@ export const Inspector: React.FC<InspectorProps> = ({
   activeTab = 'diffs',
   onTabChange,
   highlightFilePath,
+  workspacePath,
 }) => {
   const [currentTab, setCurrentTab] = useState<InspectorTab>(activeTab);
   const [selectedDiffPath, setSelectedDiffPath] = useState<string | null>(null);
@@ -46,7 +48,7 @@ export const Inspector: React.FC<InspectorProps> = ({
     }
   }, [highlightFilePath]);
 
-  const workspaceTree = useWorkspaceTree();
+  const workspaceTree = useWorkspaceTree(workspacePath);
 
   const handleTabSelect = (tab: InspectorTab) => {
     setCurrentTab(tab);
@@ -171,6 +173,7 @@ export const Inspector: React.FC<InspectorProps> = ({
             onToggleFolder={workspaceTree.toggleFolder}
             onOpenFile={workspaceTree.openFile}
             onRefresh={workspaceTree.refreshTree}
+            rootPath={workspaceTree.rootPath}
           />
         )}
 

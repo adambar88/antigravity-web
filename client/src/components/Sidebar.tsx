@@ -76,7 +76,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   />
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-xs">{session.title || 'Zadanie bez nazwy'}</div>
-                    <div className="flex items-center gap-2 mt-0.5 text-[10px] text-muted font-normal">
+                    <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-muted font-normal">
+                      <span
+                        className="truncate max-w-[80px] px-1 py-0.2 rounded bg-surface border border-border text-[9px] font-mono text-muted"
+                        title={session.workspace_path}
+                      >
+                        {session.workspace_path ? session.workspace_path.replace(/^\/home\/adam\/?/, '~/') || '~' : '~'}
+                      </span>
+                      <span>•</span>
                       <span>{session.message_count || 0} wiad.</span>
                       {session.tool_count > 0 && (
                         <>

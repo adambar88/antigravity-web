@@ -126,6 +126,7 @@ export interface CreateSessionRequest {
 
 export interface UpdateSessionRequest {
   title?: string;
+  workspace_path?: string;
   model?: string;
   effort?: ReasoningEffort;
 }

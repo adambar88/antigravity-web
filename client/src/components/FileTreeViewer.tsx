@@ -21,6 +21,7 @@ interface FileTreeViewerProps {
   onToggleFolder: (path: string) => void;
   onOpenFile: (path: string) => void;
   onRefresh: () => void;
+  rootPath?: string;
 }
 
 export const FileTreeViewer: React.FC<FileTreeViewerProps> = ({
@@ -33,6 +34,7 @@ export const FileTreeViewer: React.FC<FileTreeViewerProps> = ({
   onToggleFolder,
   onOpenFile,
   onRefresh,
+  rootPath,
 }) => {
   const renderNode = (node: WorkspaceTreeNode, depth = 0) => {
     const isExpanded = expandedFolders.has(node.path);
@@ -88,9 +90,16 @@ export const FileTreeViewer: React.FC<FileTreeViewerProps> = ({
   return (
     <div className="h-full flex flex-col">
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-surface/50">
-        <div className="flex items-center gap-2">
-          <Folder className="w-4 h-4 text-primary" />
-          <span className="text-xs font-semibold text-main">Pliki projektu</span>
+        <div className="flex items-center gap-2 min-w-0">
+          <Folder className="w-4 h-4 text-primary shrink-0" />
+          <div className="min-w-0">
+            <span
+              className="text-xs font-semibold text-main block truncate"
+              title={rootPath || 'Pliki projektu'}
+            >
+              {rootPath ? rootPath.replace(/^\/home\/adam\/?/, '~/') || '~/' : 'Pliki projektu'}
+            </span>
+          </div>
         </div>
         <button
           type="button"
