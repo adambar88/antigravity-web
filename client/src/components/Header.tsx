@@ -171,7 +171,7 @@ export const Header: React.FC<HeaderProps> = ({
           {theme === 'warm-light' ? (
             <Sun className="w-4 h-4 text-amber-500" />
           ) : (
-            <Moon className="w-4 h-4 text-purple-400" />
+            <Moon className="w-4 h-4 text-amber-400" />
           )}
         </button>
 

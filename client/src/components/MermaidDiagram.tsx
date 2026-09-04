@@ -126,7 +126,7 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
             lineColor: '#9ca3af',
             primaryColor: '#1f2937',
             primaryTextColor: '#f9fafb',
-            primaryBorderColor: '#6366f1',
+            primaryBorderColor: '#d97757',
             secondaryColor: '#111827',
             tertiaryColor: '#1f2937',
           }
@@ -142,7 +142,7 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
             lineColor: '#64748b',
             primaryColor: '#f8fafc',
             primaryTextColor: '#0f172a',
-            primaryBorderColor: '#6366f1',
+            primaryBorderColor: '#c15f34',
             secondaryColor: '#f1f5f9',
             tertiaryColor: '#ffffff',
           },
