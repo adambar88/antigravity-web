@@ -3,6 +3,7 @@ import {
   ArrowUp,
   Brain,
   CheckCircle2,
+  ChevronDown,
   FileSearch,
   ListTodo,
   Sparkles,
@@ -75,7 +76,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = 'auto';
-    const newHeight = Math.min(el.scrollHeight, 200);
+    const newHeight = Math.min(el.scrollHeight, 180);
     el.style.height = `${Math.max(newHeight, 44)}px`;
   };
 
@@ -162,33 +163,38 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
     }
   };
 
-  const effortLabels: Record<ReasoningEffort, { title: string; desc: string }> = {
-    high: { title: 'Głęboka analiza', desc: 'Maksymalna precyzja i wieloetapowe rozumowanie' },
-    medium: { title: 'Standardowa analiza', desc: 'Optymalny balans między szybkością a dokładnością' },
-    low: { title: 'Szybka odpowiedź', desc: 'Krótkie wnioskowanie dla prostych pytań' },
+  const effortLabels: Record<ReasoningEffort, { title: string; shortTitle: string; desc: string }> = {
+    high: { title: 'Głęboka analiza', shortTitle: 'Głęboka', desc: 'Maksymalna precyzja i wieloetapowe rozumowanie' },
+    medium: { title: 'Standardowa analiza', shortTitle: 'Standard', desc: 'Optymalny balans między szybkością a dokładnością' },
+    low: { title: 'Szybka odpowiedź', shortTitle: 'Szybka', desc: 'Krótkie wnioskowanie dla prostych pytań' },
   };
 
   const modelOptions = [
-    { id: 'gemini-3.8-flash-medium', name: 'Gemini 3.8 Flash', tag: 'Domyślny' },
-    { id: 'gemini-3.8-flash-high', name: 'Gemini 3.8 Flash (High)', tag: 'Głęboki' },
-    { id: 'gemini-3.7-flash-high', name: 'Gemini 3.7 Flash', tag: 'Szybki' },
-    { id: 'gemini-3.1-pro-high', name: 'Gemini 3.1 Pro', tag: 'Pro' },
-    { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', tag: 'Thinking' },
-    { id: 'claude-opus-4-6-thinking', name: 'Claude Opus 4.6', tag: 'Reasoning' },
-    { id: 'gpt-oss-120b-medium', name: 'GPT-OSS 120B', tag: 'Open Source' },
+    { id: 'gemini-3.8-flash-medium', name: 'Gemini 3.8 Flash', shortName: 'Flash', tag: 'Domyślny' },
+    { id: 'gemini-3.8-flash-high', name: 'Gemini 3.8 Flash (High)', shortName: 'Flash High', tag: 'Głęboki' },
+    { id: 'gemini-3.7-flash-high', name: 'Gemini 3.7 Flash', shortName: '3.7 Flash', tag: 'Szybki' },
+    { id: 'gemini-3.1-pro-high', name: 'Gemini 3.1 Pro', shortName: 'Pro', tag: 'Pro' },
+    { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', shortName: 'Sonnet', tag: 'Thinking' },
+    { id: 'claude-opus-4-6-thinking', name: 'Claude Opus 4.6', shortName: 'Opus', tag: 'Reasoning' },
+    { id: 'gpt-oss-120b-medium', name: 'GPT-OSS 120B', shortName: 'GPT-OSS', tag: 'Open Source' },
   ];
 
-  const currentModelName = modelOptions.find((m) => m.id === selectedModel)?.name || selectedModel;
+  const currentModel = modelOptions.find((m) => m.id === selectedModel) || {
+    id: selectedModel,
+    name: selectedModel,
+    shortName: selectedModel.replace('gemini-', '').replace('claude-', ''),
+    tag: '',
+  };
 
   return (
-    <div className="relative w-full max-w-4xl mx-auto px-4 pb-3">
+    <div className="relative w-full max-w-4xl mx-auto px-3 sm:px-4 pb-3">
       {/* Slash command popover */}
       {showSlashMenu && (
-        <div className="absolute bottom-full mb-2 left-4 w-80 bg-surface border border-border rounded-2xl shadow-xl overflow-hidden z-30 transition-all">
+        <div className="absolute bottom-full mb-2 left-3 sm:left-4 w-80 max-w-[calc(100vw-24px)] bg-surface border border-border rounded-2xl shadow-xl overflow-hidden z-30 transition-all">
           <div className="p-2 border-b border-border text-[11px] font-medium text-muted uppercase tracking-wider">
             Dostępne polecenia
           </div>
-          <div className="p-1 space-y-0.5">
+          <div className="p-1 space-y-0.5 max-h-60 overflow-y-auto">
             {SLASH_COMMANDS.map((cmd, idx) => {
               const Icon = cmd.icon;
               const isSelected = idx === selectedSlashIndex;
@@ -222,8 +228,9 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
         </div>
       )}
 
-      {/* Main composer box */}
-      <div className="relative rounded-2xl border border-border bg-surface shadow-md focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-all">
+      {/* Main composer box: clean textarea + discreet bottom bar */}
+      <div className="flex flex-col rounded-2xl border border-border bg-surface shadow-md focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-all">
+        {/* Unobstructed typing area */}
         <textarea
           ref={textareaRef}
           value={text}
@@ -232,12 +239,13 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
           placeholder="Napisz wiadomość lub wpisz / aby wybrać polecenie..."
           rows={1}
           disabled={disabled}
-          className="w-full resize-none bg-transparent px-4 pt-3.5 pb-12 text-sm text-main placeholder:text-muted focus:outline-hidden min-h-[44px] max-h-[200px]"
+          className="w-full resize-none bg-transparent px-3.5 pt-3 pb-1 text-sm text-main placeholder:text-muted focus:outline-hidden min-h-[44px] max-h-[180px]"
         />
 
-        <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between pointer-events-auto">
-          <div className="relative flex items-center gap-1.5 flex-wrap">
-            {/* Model selector dropdown */}
+        {/* Discreet bottom action bar */}
+        <div className="flex items-center justify-between px-2.5 pb-2 pt-1 border-t border-border/20">
+          <div className="relative flex items-center gap-1">
+            {/* Discreet Model selector */}
             <div className="relative">
               <button
                 type="button"
@@ -245,14 +253,17 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
                   setShowModelMenu(!showModelMenu);
                   setShowEffortMenu(false);
                 }}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium text-muted hover:text-main bg-card hover:bg-surface-hover border border-border transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium text-muted hover:text-main hover:bg-surface-hover transition-colors cursor-pointer"
+                title="Wybierz model"
               >
-                <Brain className="w-3 h-3 text-primary" />
-                <span>{currentModelName}</span>
+                <Brain className="w-3.5 h-3.5 text-primary shrink-0" />
+                <span className="hidden sm:inline">{currentModel.name}</span>
+                <span className="sm:hidden">{currentModel.shortName}</span>
+                <ChevronDown className="w-2.5 h-2.5 opacity-50" />
               </button>
 
               {showModelMenu && (
-                <div className="absolute bottom-full mb-2 left-0 w-64 bg-surface border border-border rounded-xl shadow-lg p-1.5 z-40">
+                <div className="absolute bottom-full mb-2 left-0 w-64 max-w-[calc(100vw-32px)] bg-surface border border-border rounded-xl shadow-xl p-1.5 z-40">
                   <div className="text-[11px] font-medium text-muted px-2 py-1">
                     Wybierz model Antigravity:
                   </div>
@@ -279,7 +290,9 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
               )}
             </div>
 
-            {/* Effort selector dropdown toggle */}
+            <span className="text-border/60 text-xs select-none">•</span>
+
+            {/* Discreet Effort selector */}
             <div className="relative">
               <button
                 type="button"
@@ -287,14 +300,17 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
                   setShowEffortMenu(!showEffortMenu);
                   setShowModelMenu(false);
                 }}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium text-muted hover:text-main bg-card hover:bg-surface-hover border border-border transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium text-muted hover:text-main hover:bg-surface-hover transition-colors cursor-pointer"
+                title="Wybierz poziom analizy"
               >
-                <Sparkles className="w-3 h-3 text-primary" />
-                <span>{effortLabels[effort].title}</span>
+                <Sparkles className="w-3.5 h-3.5 text-primary shrink-0" />
+                <span className="hidden sm:inline">{effortLabels[effort].title}</span>
+                <span className="sm:hidden">{effortLabels[effort].shortTitle}</span>
+                <ChevronDown className="w-2.5 h-2.5 opacity-50" />
               </button>
 
               {showEffortMenu && (
-                <div className="absolute bottom-full mb-2 left-0 w-64 bg-surface border border-border rounded-xl shadow-lg p-1.5 z-40">
+                <div className="absolute bottom-full mb-2 left-0 w-64 max-w-[calc(100vw-32px)] bg-surface border border-border rounded-xl shadow-xl p-1.5 z-40">
                   <div className="text-[11px] font-medium text-muted px-2 py-1">
                     Wybierz poziom analizy:
                   </div>
@@ -328,10 +344,10 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
                 type="button"
                 onClick={onAbort}
                 title="Wstrzymaj generowanie"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
               >
-                <Square className="w-3.5 h-3.5 fill-current" />
-                <span>Zatrzymaj</span>
+                <Square className="w-3 h-3 fill-current" />
+                <span className="text-[11px]">Zatrzymaj</span>
               </button>
             ) : (
               <button
@@ -348,9 +364,10 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
         </div>
       </div>
 
-      <div className="text-center mt-2 text-[11px] text-subtle">
+      <div className="hidden sm:block text-center mt-2 text-[11px] text-subtle">
         Wciśnij <kbd className="px-1 py-0.5 rounded bg-card border border-border font-mono text-[10px]">Enter</kbd> aby wysłać, <kbd className="px-1 py-0.5 rounded bg-card border border-border font-mono text-[10px]">Shift+Enter</kbd> dla nowej linii.
       </div>
     </div>
   );
 };
+

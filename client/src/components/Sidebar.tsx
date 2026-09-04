@@ -75,10 +75,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     }`}
                   />
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-xs">{session.title || 'Zadanie bez nazwy'}</div>
+                    <div className="text-xs break-words line-clamp-2 leading-snug font-medium">
+                      {session.title || 'Zadanie bez nazwy'}
+                    </div>
                     <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-muted font-normal">
                       <span
-                        className="truncate max-w-[80px] px-1 py-0.2 rounded bg-surface border border-border text-[9px] font-mono text-muted"
+                        className="truncate max-w-[120px] px-1 py-0.2 rounded bg-surface border border-border text-[9px] font-mono text-muted"
                         title={session.workspace_path}
                       >
                         {session.workspace_path ? session.workspace_path.replace(/^\/home\/adam\/?/, '~/') || '~' : '~'}
