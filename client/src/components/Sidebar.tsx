@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   MessageSquare,
   Plus,
@@ -33,6 +33,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [isDesktop, setIsDesktop] = useState(
+    typeof window !== 'undefined' ? window.innerWidth >= 768 : true
+  );
+
+  useEffect(() => {
+    const handleResize = () => setIsDesktop(window.innerWidth >= 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const {
     size: sidebarWidth,
@@ -171,9 +180,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       <aside
         style={{
-          width: isOpenMobile ? undefined : `${sidebarWidth}px`,
+          width: isDesktop ? `${sidebarWidth}px` : undefined,
         }}
-        className={`fixed md:static inset-y-0 left-0 w-72 md:w-auto shrink-0 bg-surface border-r border-border flex flex-col z-40 transition-transform duration-200 md:translate-x-0 relative ${
+        className={`fixed md:relative inset-y-0 left-0 w-72 md:w-auto shrink-0 bg-surface border-r border-border flex flex-col z-40 transition-transform duration-200 md:translate-x-0 ${
           isOpenMobile ? 'translate-x-0' : '-translate-x-full'
         }`}
       >

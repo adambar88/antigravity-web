@@ -125,7 +125,7 @@ export const Inspector: React.FC<InspectorProps> = ({
         width: isDesktop ? `${desktopWidth}px` : '100%',
         height: isDesktop ? '100%' : `${mobileHeight}px`,
       }}
-      className="fixed md:static inset-x-0 bottom-14 md:bottom-auto md:h-full shrink-0 flex flex-col bg-surface border-t md:border-t-0 md:border-l border-border rounded-t-2xl md:rounded-none shadow-2xl md:shadow-none z-40 md:z-20 overflow-hidden relative"
+      className="fixed md:relative inset-x-0 bottom-14 md:bottom-auto md:h-full shrink-0 flex flex-col bg-surface border-t md:border-t-0 md:border-l border-border rounded-t-2xl md:rounded-none shadow-2xl md:shadow-none z-40 md:z-20 overflow-hidden"
     >
       {/* Desktop Resize Handle on Left Edge */}
       <div className="hidden md:block absolute left-0 top-0 bottom-0 -translate-x-1/2 z-50">
