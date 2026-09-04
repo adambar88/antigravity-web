@@ -11,6 +11,8 @@ import {
   Trash2,
 } from 'lucide-react';
 import { ReasoningEffort } from '@/types';
+import { useResizable } from '@/hooks/useResizable';
+import { ResizeHandle } from './ResizeHandle';
 
 interface SlashCommand {
   command: string;
@@ -69,12 +71,56 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
   const [showEffortMenu, setShowEffortMenu] = useState(false);
   const [showModelMenu, setShowModelMenu] = useState(false);
 
+  const [isManualHeight, setIsManualHeight] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return Boolean(localStorage.getItem('ag_composer_height_manual'));
+    }
+    return false;
+  });
+
+  const {
+    size: composerHeight,
+    isDragging: isDraggingHeight,
+    resetSize: resetComposerHeight,
+    handlePointerDown: handleHeightDown,
+    handlePointerMove: handleHeightMove,
+    handlePointerUp: handleHeightUp,
+  } = useResizable({
+    initialSize: 120,
+    minSize: 44,
+    maxSize: () => (typeof window !== 'undefined' ? Math.min(450, window.innerHeight * 0.55) : 400),
+    direction: 'vertical',
+    reverse: true, // Dragging up increases height
+    storageKey: 'ag_composer_height',
+    onResize: () => {
+      setIsManualHeight(true);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('ag_composer_height_manual', 'true');
+      }
+    },
+  });
+
+  const handleResetHeight = () => {
+    resetComposerHeight();
+    setIsManualHeight(false);
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('ag_composer_height_manual');
+    }
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
+  };
+
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   // Auto-resize textarea
   const adjustHeight = () => {
     const el = textareaRef.current;
     if (!el) return;
+    if (isManualHeight) {
+      el.style.height = `${composerHeight}px`;
+      return;
+    }
     el.style.height = 'auto';
     const newHeight = Math.min(el.scrollHeight, 180);
     el.style.height = `${Math.max(newHeight, 44)}px`;
@@ -82,7 +128,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
 
   useEffect(() => {
     adjustHeight();
-  }, [text]);
+  }, [text, isManualHeight, composerHeight]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
@@ -245,7 +291,22 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
       )}
 
       {/* Main composer box: clean textarea + discreet bottom bar */}
-      <div className="flex flex-col rounded-2xl border border-border bg-surface shadow-md focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-all">
+      <div className="flex flex-col rounded-2xl border border-border bg-surface shadow-md focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-all relative">
+        {/* Top Resize Handle Bar */}
+        <div className="w-full flex justify-center pt-1.5 pb-0.5 cursor-row-resize touch-none select-none">
+          <ResizeHandle
+            direction="vertical"
+            showPill={true}
+            isDragging={isDraggingHeight}
+            onPointerDown={handleHeightDown}
+            onPointerMove={handleHeightMove}
+            onPointerUp={handleHeightUp}
+            onDoubleClick={handleResetHeight}
+            title="Przeciągnij w górę, aby powiększyć pole pisania (podwójne kliknięcie: auto)"
+            className="w-full h-3"
+          />
+        </div>
+
         {/* Unobstructed typing area */}
         <textarea
           ref={textareaRef}
@@ -256,7 +317,8 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
           placeholder="Napisz wiadomość lub wpisz / aby wybrać polecenie..."
           rows={1}
           disabled={disabled}
-          className="w-full resize-none bg-transparent px-3.5 pt-3 pb-1 text-sm text-main placeholder:text-muted focus:outline-hidden min-h-[44px] max-h-[180px]"
+          style={isManualHeight ? { height: `${composerHeight}px`, maxHeight: 'none' } : undefined}
+          className="w-full resize-none bg-transparent px-3.5 pt-1.5 pb-1 text-sm text-main placeholder:text-muted focus:outline-hidden min-h-[44px]"
         />
 
         {/* Discreet bottom action bar */}

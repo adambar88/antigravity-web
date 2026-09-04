@@ -28,6 +28,8 @@ import {
 import { FileCategory, WorkspaceFileResponse, WorkspaceTreeNode } from '@/types';
 import { api } from '@/services/api';
 import { MarkdownRenderer } from './MarkdownRenderer';
+import { useResizable } from '@/hooks/useResizable';
+import { ResizeHandle } from './ResizeHandle';
 
 interface FileTreeViewerProps {
   tree: WorkspaceTreeNode[];
@@ -98,6 +100,50 @@ export const FileTreeViewer: React.FC<FileTreeViewerProps> = ({
   onRefresh,
   rootPath,
 }) => {
+  const [isDesktop, setIsDesktop] = useState(
+    typeof window !== 'undefined' ? window.innerWidth >= 768 : true
+  );
+
+  useEffect(() => {
+    const handleResize = () => setIsDesktop(window.innerWidth >= 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Desktop tree width
+  const {
+    size: treeWidth,
+    isDragging: isDraggingTree,
+    resetSize: resetTreeWidth,
+    handlePointerDown: handleTreeDown,
+    handlePointerMove: handleTreeMove,
+    handlePointerUp: handleTreeUp,
+  } = useResizable({
+    initialSize: 260,
+    minSize: 160,
+    maxSize: () => (typeof window !== 'undefined' ? Math.min(500, window.innerWidth * 0.45) : 500),
+    direction: 'horizontal',
+    reverse: false,
+    storageKey: 'ag_filetree_width',
+  });
+
+  // Mobile tree height
+  const {
+    size: treeHeightMobile,
+    isDragging: isDraggingTreeMobile,
+    resetSize: resetTreeHeightMobile,
+    handlePointerDown: handleTreeMobileDown,
+    handlePointerMove: handleTreeMobileMove,
+    handlePointerUp: handleTreeMobileUp,
+  } = useResizable({
+    initialSize: 220,
+    minSize: 100,
+    maxSize: 450,
+    direction: 'vertical',
+    reverse: false,
+    storageKey: 'ag_filetree_height_mobile',
+  });
+
   const [searchQuery, setSearchQuery] = useState('');
   const [markdownMode, setMarkdownMode] = useState<'preview' | 'raw'>('preview');
   const [wrapLines, setWrapLines] = useState(true);
@@ -436,9 +482,43 @@ export const FileTreeViewer: React.FC<FileTreeViewerProps> = ({
 
       <div className="flex-1 min-h-0 flex flex-col md:flex-row">
         {/* Tree Sidebar */}
-        <div className="w-full md:w-64 flex flex-col border-b md:border-b-0 md:border-r border-border shrink-0 max-h-56 md:max-h-full bg-surface/20">
+        <div
+          style={{
+            width: isDesktop ? `${treeWidth}px` : '100%',
+            height: isDesktop ? '100%' : `${treeHeightMobile}px`,
+          }}
+          className="flex flex-col border-b md:border-b-0 md:border-r border-border shrink-0 bg-surface/20 relative"
+        >
+          {/* Desktop Right Resize Handle */}
+          <div className="hidden md:block absolute right-0 top-0 bottom-0 translate-x-1/2 z-40">
+            <ResizeHandle
+              direction="horizontal"
+              isDragging={isDraggingTree}
+              onPointerDown={handleTreeDown}
+              onPointerMove={handleTreeMove}
+              onPointerUp={handleTreeUp}
+              onDoubleClick={resetTreeWidth}
+              title="Zmień szerokość drzewa katalogów (podwójne kliknięcie resetuje)"
+            />
+          </div>
+
+          {/* Mobile Bottom Resize Handle */}
+          <div className="md:hidden absolute bottom-0 left-0 right-0 translate-y-1/2 z-40 flex justify-center">
+            <ResizeHandle
+              direction="vertical"
+              showPill={true}
+              isDragging={isDraggingTreeMobile}
+              onPointerDown={handleTreeMobileDown}
+              onPointerMove={handleTreeMobileMove}
+              onPointerUp={handleTreeMobileUp}
+              onDoubleClick={resetTreeHeightMobile}
+              title="Zmień wysokość listy plików (podwójne kliknięcie resetuje)"
+              className="w-full h-4"
+            />
+          </div>
+
           {/* Quick Filter Bar */}
-          <div className="p-2 border-b border-border/60">
+          <div className="p-2 border-b border-border/60 shrink-0">
             <div className="relative">
               <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-subtle" />
               <input

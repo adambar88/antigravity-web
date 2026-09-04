@@ -9,6 +9,8 @@ import {
 } from 'lucide-react';
 import { SessionSummary } from '@/types';
 import { groupSessionsByDate } from '@/utils/formatters';
+import { useResizable } from '@/hooks/useResizable';
+import { ResizeHandle } from './ResizeHandle';
 
 interface SidebarProps {
   sessions: SessionSummary[];
@@ -31,6 +33,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  const {
+    size: sidebarWidth,
+    isDragging: isDraggingSidebar,
+    resetSize: resetSidebarWidth,
+    handlePointerDown,
+    handlePointerMove,
+    handlePointerUp,
+  } = useResizable({
+    initialSize: 260,
+    minSize: 200,
+    maxSize: () => Math.min(460, window.innerWidth * 0.4),
+    direction: 'horizontal',
+    reverse: false,
+    storageKey: 'ag_sidebar_width',
+  });
 
   const filteredSessions = useMemo(() => {
     if (!searchQuery.trim()) return sessions;
@@ -152,10 +170,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
       )}
 
       <aside
-        className={`fixed md:static inset-y-0 left-0 w-64 md:w-56 lg:w-64 shrink-0 bg-surface border-r border-border flex flex-col z-40 transition-transform duration-200 md:translate-x-0 ${
+        style={{
+          width: isOpenMobile ? undefined : `${sidebarWidth}px`,
+        }}
+        className={`fixed md:static inset-y-0 left-0 w-72 md:w-auto shrink-0 bg-surface border-r border-border flex flex-col z-40 transition-transform duration-200 md:translate-x-0 relative ${
           isOpenMobile ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
+        {/* Desktop Resize Handle on right edge */}
+        <div className="hidden md:block absolute right-0 top-0 bottom-0 translate-x-1/2 z-50">
+          <ResizeHandle
+            direction="horizontal"
+            isDragging={isDraggingSidebar}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onDoubleClick={resetSidebarWidth}
+            title="Zmień szerokość paska zadań (podwójne kliknięcie resetuje)"
+          />
+        </div>
+
         {/* Top bar: Brand + New Task button */}
         <div className="p-3 border-b border-border space-y-2">
           <div className="flex items-center justify-between">

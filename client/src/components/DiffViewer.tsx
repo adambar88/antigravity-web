@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef } from 'react';
 import { Check, Columns, Copy, FileCode, Rows } from 'lucide-react';
 import { FileDiff } from '@/types';
 import { computeFileDiff } from '@/utils/diffHelper';
+import { ResizeHandle } from './ResizeHandle';
 
 interface DiffViewerProps {
   diff: FileDiff;
@@ -10,6 +11,55 @@ interface DiffViewerProps {
 export const DiffViewer: React.FC<DiffViewerProps> = React.memo(({ diff }) => {
   const [viewMode, setViewMode] = useState<'inline' | 'split'>('inline');
   const [copied, setCopied] = useState(false);
+  const splitContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const [splitPercent, setSplitPercent] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('ag_diff_split_ratio');
+      if (saved) {
+        const val = parseFloat(saved);
+        if (!isNaN(val) && val >= 20 && val <= 80) return val;
+      }
+    }
+    return 50;
+  });
+  const [isDraggingSplit, setIsDraggingSplit] = useState(false);
+
+  const handleSplitPointerDown = (e: React.PointerEvent) => {
+    e.preventDefault();
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {}
+    setIsDraggingSplit(true);
+  };
+
+  const handleSplitPointerMove = (e: React.PointerEvent) => {
+    if (!isDraggingSplit || !splitContainerRef.current) return;
+    const rect = splitContainerRef.current.getBoundingClientRect();
+    if (rect.width <= 0) return;
+    const offset = e.clientX - rect.left;
+    const pct = Math.max(20, Math.min(80, Math.round((offset / rect.width) * 100)));
+    setSplitPercent(pct);
+  };
+
+  const handleSplitPointerUp = (e: React.PointerEvent) => {
+    if (isDraggingSplit) {
+      try {
+        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch {}
+      setIsDraggingSplit(false);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('ag_diff_split_ratio', splitPercent.toString());
+      }
+    }
+  };
+
+  const resetSplit = () => {
+    setSplitPercent(50);
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('ag_diff_split_ratio');
+    }
+  };
 
   const computed = useMemo(() => {
     return computeFileDiff(diff.before_content || '', diff.after_content || '');
@@ -132,11 +182,12 @@ export const DiffViewer: React.FC<DiffViewerProps> = React.memo(({ diff }) => {
             </tbody>
           </table>
         ) : (
-          <div className="grid grid-cols-2 divide-x divide-border">
+          <div ref={splitContainerRef} className="flex divide-x divide-border relative">
             {/* Left: Old */}
-            <div className="overflow-x-auto">
-              <div className="px-3 py-1 bg-surface/50 text-[10px] font-semibold text-muted border-b border-border">
-                Przed zmianą
+            <div style={{ width: `${splitPercent}%` }} className="overflow-x-auto shrink-0">
+              <div className="px-3 py-1 bg-surface/50 text-[10px] font-semibold text-muted border-b border-border flex items-center justify-between">
+                <span>Przed zmianą</span>
+                <span className="text-[10px] text-subtle font-mono">{splitPercent}%</span>
               </div>
               <table className="w-full border-collapse">
                 <tbody>
@@ -164,10 +215,25 @@ export const DiffViewer: React.FC<DiffViewerProps> = React.memo(({ diff }) => {
               </table>
             </div>
 
+            {/* Split Resizer Handle */}
+            <div className="relative flex items-center justify-center z-20">
+              <ResizeHandle
+                direction="horizontal"
+                isDragging={isDraggingSplit}
+                onPointerDown={handleSplitPointerDown}
+                onPointerMove={handleSplitPointerMove}
+                onPointerUp={handleSplitPointerUp}
+                onDoubleClick={resetSplit}
+                title="Przeciągnij, aby zmienić proporcje kolumn (podwójne kliknięcie: 50/50)"
+                className="w-2.5 h-full cursor-col-resize -mx-1.5"
+              />
+            </div>
+
             {/* Right: New */}
-            <div className="overflow-x-auto">
-              <div className="px-3 py-1 bg-surface/50 text-[10px] font-semibold text-muted border-b border-border">
-                Po zmianie
+            <div style={{ width: `${100 - splitPercent}%` }} className="overflow-x-auto shrink-0">
+              <div className="px-3 py-1 bg-surface/50 text-[10px] font-semibold text-muted border-b border-border flex items-center justify-between">
+                <span>Po zmianie</span>
+                <span className="text-[10px] text-subtle font-mono">{100 - splitPercent}%</span>
               </div>
               <table className="w-full border-collapse">
                 <tbody>

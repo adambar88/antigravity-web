@@ -172,12 +172,19 @@ export default function App() {
 
         {/* Central Workspace Content: Chat + Inspector */}
         <div className="flex-1 flex min-h-0 overflow-hidden relative">
+          {/* Mobile backdrop when Inspector is open */}
+          {isInspectorOpen && (
+            <div
+              onClick={() => {
+                setIsInspectorOpen(false);
+                setMobileTab('chat');
+              }}
+              className="fixed inset-0 bg-black/25 backdrop-blur-[1px] z-30 md:hidden transition-opacity"
+            />
+          )}
+
           {/* Chat Canvas Area */}
-          <div
-            className={`flex-1 flex flex-col min-w-0 h-full overflow-hidden transition-all ${
-              isInspectorOpen ? 'hidden md:flex' : 'flex'
-            }`}
-          >
+          <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden transition-all flex">
             <ChatCanvas
               messages={messages}
               currentThought={currentThought}
