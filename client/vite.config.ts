@@ -39,9 +39,18 @@ export default defineConfig({
               return 'icons';
             }
             if (
+              id.includes('mermaid') ||
+              id.includes('d3') ||
+              id.includes('dagre') ||
+              id.includes('cytoscape') ||
+              id.includes('khroma') ||
+              id.includes('katex')
+            ) {
+              return 'mermaid';
+            }
+            if (
               id.includes('marked') ||
-              id.includes('diff') ||
-              id.includes('mermaid')
+              id.includes('diff')
             ) {
               return 'markdown';
             }
