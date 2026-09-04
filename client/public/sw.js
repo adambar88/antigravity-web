@@ -3,17 +3,17 @@
  * PWA Offline Cache, Static Shell Precaching & Ergonomic API Handling
  */
 
-const CACHE_VERSION = 'agy-v1.0.0';
+const CACHE_VERSION = 'agy-v1.0.1';
 const STATIC_CACHE_NAME = `antigravity-static-${CACHE_VERSION}`;
 const API_CACHE_NAME = `antigravity-api-${CACHE_VERSION}`;
 
-// Precache essential application shell files
+// Precache essential application shell files relative to service worker scope
 const PRECACHE_ASSETS = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/icons/icon-192.svg',
-  '/icons/icon-512.svg'
+  './',
+  './index.html',
+  './manifest.json',
+  './icons/icon-192.svg',
+  './icons/icon-512.svg'
 ];
 
 // 1. Install Event - Precache App Shell
@@ -154,6 +154,11 @@ self.addEventListener('fetch', (event) => {
         return fetch(request)
           .then((networkResponse) => {
             if (!networkResponse || networkResponse.status !== 200 || networkResponse.type === 'opaque') {
+              return networkResponse;
+            }
+            // Do NOT cache if response is HTML (e.g. SPA 404 fallback returning index.html for missing js/css)
+            const contentType = networkResponse.headers.get('content-type') || '';
+            if (contentType.includes('text/html') && !url.pathname.endsWith('.html')) {
               return networkResponse;
             }
             const responseToCache = networkResponse.clone();

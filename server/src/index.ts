@@ -70,20 +70,28 @@ export async function buildServer() {
     await server.register(fastifyStatic, {
       root: clientDist,
       prefix: '/',
-      wildcard: false,
+      wildcard: true,
     });
     await server.register(fastifyStatic, {
       root: clientDist,
       prefix: '/agy/',
       decorateReply: false,
-      wildcard: false,
+      wildcard: true,
     });
 
-    // SPA fallback: non-API routes fallback to client index.html
+    // SPA fallback: non-API, non-asset navigation routes fallback to client index.html
     server.setNotFoundHandler((request, reply) => {
       const url = request.raw.url || '';
       const cleanUrl = url.replace(/^\/agy/, '');
-      if (!cleanUrl.startsWith('/api') && !cleanUrl.startsWith('/health')) {
+      const pathname = cleanUrl.split('?')[0];
+
+      // Never serve index.html for static assets or files with extensions that don't exist
+      const isStaticAsset =
+        pathname.startsWith('/assets/') ||
+        pathname.startsWith('/icons/') ||
+        /\.[a-zA-Z0-9]+$/.test(pathname);
+
+      if (!isStaticAsset && !cleanUrl.startsWith('/api') && !cleanUrl.startsWith('/health')) {
         const indexPath = path.join(clientDist, 'index.html');
         if (fs.existsSync(indexPath)) {
           return reply.sendFile('index.html');

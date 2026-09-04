@@ -51,10 +51,10 @@
       "name": "New Session",
       "short_name": "New Session",
       "description": "Start a new autonomous AI coding session",
-      "url": "/?action=new",
+      "url": "./?action=new",
       "icons": [
         {
-          "src": "/icons/icon-192.svg",
+          "src": "icons/icon-192.svg",
           "sizes": "192x192",
           "type": "image/svg+xml"
         }
@@ -64,10 +64,10 @@
       "name": "Active Sessions",
       "short_name": "Sessions",
       "description": "Browse and resume active dev sessions",
-      "url": "/?view=sessions",
+      "url": "./?view=sessions",
       "icons": [
         {
-          "src": "/icons/icon-192.svg",
+          "src": "icons/icon-192.svg",
           "sizes": "192x192",
           "type": "image/svg+xml"
         }

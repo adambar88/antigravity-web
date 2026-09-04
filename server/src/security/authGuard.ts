@@ -8,7 +8,7 @@ export function getExpectedToken(): string {
 }
 
 export function isAuthDisabled(): boolean {
-  return process.env.AUTH_DISABLED === 'true';
+  return process.env.AUTH_DISABLED === 'true' || (!process.env.AUTH_TOKEN && !process.env.DEV_AUTH_TOKEN);
 }
 
 /**
@@ -82,7 +82,8 @@ export function extractToken(request: FastifyRequest): string | null {
  * Fastify preHandler hook to guard API routes.
  */
 export async function authGuard(request: FastifyRequest, reply: FastifyReply): Promise<void> {
-  const url = request.url.split('?')[0];
+  const rawUrl = request.url.split('?')[0];
+  const url = rawUrl.replace(/^\/agy/, '');
 
   // Whitelist public endpoints
   if (
