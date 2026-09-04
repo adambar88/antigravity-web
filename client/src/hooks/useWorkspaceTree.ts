@@ -36,19 +36,34 @@ export function useWorkspaceTree(workspacePath?: string) {
     }
   }, [workspacePath]);
 
-  const fetchTree = useCallback(async (targetRoot?: string) => {
-    const activeRoot = targetRoot || rootPath || workspacePath || '/home/adam';
+  const fetchTree = useCallback(async (targetRoot?: unknown) => {
+    const validTarget = typeof targetRoot === 'string' && targetRoot.trim() ? targetRoot.trim() : null;
+    const activeRoot = validTarget || rootPath || workspacePath || '/home/adam';
     setIsLoadingTree(true);
     try {
       const res = await api.getWorkspaceTree(activeRoot, 8);
       setTree(res.tree || []);
-      setRootPath(res.root || activeRoot);
+      const newRoot = res.root || activeRoot;
+      setRootPath(newRoot);
+
+      if (selectedFilePath) {
+        try {
+          const fileRes = await api.getWorkspaceFile(selectedFilePath, newRoot);
+          setSelectedFileContent(fileRes);
+        } catch {
+          // zachowaj obecny podgląd, jeśli odświeżenie pliku nie powiodło się
+        }
+      }
     } catch (err) {
       console.warn('Nie udało się pobrać drzewa projektu:', err);
     } finally {
       setIsLoadingTree(false);
     }
-  }, [rootPath, workspacePath]);
+  }, [rootPath, workspacePath, selectedFilePath]);
+
+  const refreshTree = useCallback(async () => {
+    await fetchTree();
+  }, [fetchTree]);
 
   useEffect(() => {
     fetchTree(workspacePath);
@@ -118,6 +133,7 @@ export function useWorkspaceTree(workspacePath?: string) {
     expandedFolders,
     toggleFolder,
     openFile,
-    refreshTree: fetchTree,
+    refreshTree,
+    fetchTree,
   };
 }

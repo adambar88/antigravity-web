@@ -400,7 +400,7 @@ export const Inspector: React.FC<InspectorProps> = ({
             isLoadingFile={workspaceTree.isLoadingFile}
             onToggleFolder={workspaceTree.toggleFolder}
             onOpenFile={workspaceTree.openFile}
-            onRefresh={workspaceTree.refreshTree}
+            onRefresh={() => workspaceTree.refreshTree()}
             rootPath={workspaceTree.rootPath}
           />
         )}

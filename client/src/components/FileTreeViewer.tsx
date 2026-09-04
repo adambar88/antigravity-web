@@ -471,7 +471,7 @@ export const FileTreeViewer: React.FC<FileTreeViewerProps> = ({
         </div>
         <button
           type="button"
-          onClick={onRefresh}
+          onClick={() => onRefresh()}
           disabled={isLoadingTree}
           title="Odśwież strukturę"
           className="p-1 rounded-md text-subtle hover:text-main hover:bg-surface-hover transition-colors cursor-pointer"

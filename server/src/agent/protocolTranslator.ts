@@ -17,7 +17,7 @@ import {
   syncBrainDirArtifacts,
 } from './artifactSync.js';
 import { processSlashCommand } from './slashCommands.js';
-import { getSubagentsForSession } from './subagentTracker.js';
+import { getSubagentsForSession, getSubagentsForSessionAsync } from './subagentTracker.js';
 import type {
   SSEEventType,
   SSEEventEnvelope,
@@ -191,18 +191,28 @@ export async function runAgentTurn(options: RunAgentTurnOptions): Promise<void> 
   let thoughtDurationMs: number | null = null;
   let activeConversationId: string | null = session.agy_conversation_id || null;
 
-  // Helper to read live reasoning from transcript.jsonl
-  const pollTranscript = () => {
-    if (!activeConversationId) return;
-    const transcriptPath = path.join(
-      process.env.HOME || '/home/adam',
-      '.gemini/antigravity-cli/brain',
-      activeConversationId,
-      '.system_generated/logs/transcript.jsonl'
-    );
-    if (!fs.existsSync(transcriptPath)) return;
+  // Helper to read live reasoning from transcript.jsonl asynchronously without blocking the event loop
+  let isPollingTranscript = false;
+  let lastPollTranscriptTime = 0;
+
+  const pollTranscriptAsync = async () => {
+    if (!activeConversationId || isPollingTranscript) return;
+    const now = Date.now();
+    if (now - lastPollTranscriptTime < 2000) return; // Limit polling to at most once per 2 seconds
+    lastPollTranscriptTime = now;
+    isPollingTranscript = true;
+
     try {
-      const content = fs.readFileSync(transcriptPath, 'utf-8');
+      const transcriptPath = path.join(
+        process.env.HOME || '/home/adam',
+        '.gemini/antigravity-cli/brain',
+        activeConversationId,
+        '.system_generated/logs/transcript.jsonl'
+      );
+
+      const content = await fs.promises.readFile(transcriptPath, 'utf-8').catch(() => null);
+      if (!content) return;
+
       const lines = content.split('\n');
       for (const line of lines) {
         if (!line.trim()) continue;
@@ -224,6 +234,8 @@ export async function runAgentTurn(options: RunAgentTurnOptions): Promise<void> 
       }
     } catch {
       // non-fatal
+    } finally {
+      isPollingTranscript = false;
     }
   };
 
@@ -337,13 +349,13 @@ export async function runAgentTurn(options: RunAgentTurnOptions): Promise<void> 
       const stepType = step.step_type;
       const state = step.state;
 
-      // Check transcript for thinking tokens
-      pollTranscript();
-
       // --- AGENT RESPONSE / THOUGHT ---
       if (stepType === 'agent_response') {
-        if (step.usage?.thinking_tokens && !thoughtStartMs) {
-          thoughtStartMs = Date.now();
+        if (step.usage?.thinking_tokens) {
+          if (!thoughtStartMs) {
+            thoughtStartMs = Date.now();
+          }
+          void pollTranscriptAsync();
         }
 
         // Text delta chunk
@@ -358,7 +370,7 @@ export async function runAgentTurn(options: RunAgentTurnOptions): Promise<void> 
 
         // Response step completion
         if (state === 'DONE') {
-          pollTranscript();
+          void pollTranscriptAsync();
           if (thoughtStartMs && !thoughtDurationMs) {
             thoughtDurationMs = Math.round(
               step.duration_seconds
@@ -488,14 +500,16 @@ export async function runAgentTurn(options: RunAgentTurnOptions): Promise<void> 
 
           // If subagent tool was executed, immediately broadcast subagents state
           if (['invoke_subagent', 'manage_subagents'].includes(toolName)) {
-            try {
-              const subs = getSubagentsForSession(sessionId);
-              if (subs.length > 0) {
-                sessionEventHub.broadcast(sessionId, 'subagent_update', { subagents: subs });
-              }
-            } catch (subErr) {
-              console.warn(`[subagent_update:error:${sessionId}]`, subErr);
-            }
+            hasSubagents = true;
+            void getSubagentsForSessionAsync(sessionId)
+              .then((subs) => {
+                if (subs.length > 0) {
+                  sessionEventHub.broadcast(sessionId, 'subagent_update', { subagents: subs });
+                }
+              })
+              .catch((subErr) => {
+                console.warn(`[subagent_update:error:${sessionId}]`, subErr);
+              });
           }
         }
       }
@@ -520,7 +534,7 @@ export async function runAgentTurn(options: RunAgentTurnOptions): Promise<void> 
       proc.closeStdin();
 
       // Final transcript poll
-      pollTranscript();
+      void pollTranscriptAsync();
 
       const completePayload: MessageCompletePayload = {
         message_id: assistantMsgId,
@@ -538,17 +552,30 @@ export async function runAgentTurn(options: RunAgentTurnOptions): Promise<void> 
     }
   };
 
-  // Periodic poll for subagents during active execution
-  const subagentPollInterval = setInterval(() => {
+  let hasSubagents = false;
+  if (session.agy_conversation_id) {
+    void getSubagentsForSessionAsync(sessionId)
+      .then((subs) => {
+        if (subs.length > 0) {
+          hasSubagents = true;
+          sessionEventHub.broadcast(sessionId, 'subagent_update', { subagents: subs });
+        }
+      })
+      .catch(() => {});
+  }
+
+  // Periodic poll for subagents during active execution only if subagents are in use
+  const subagentPollInterval = setInterval(async () => {
+    if (!hasSubagents) return;
     try {
-      const subs = getSubagentsForSession(sessionId);
+      const subs = await getSubagentsForSessionAsync(sessionId);
       if (subs.length > 0) {
         sessionEventHub.broadcast(sessionId, 'subagent_update', { subagents: subs });
       }
     } catch {
       // non-fatal
     }
-  }, 3500);
+  }, 4000);
 
   proc.child.stdout?.on('data', (chunk: Buffer) => {
     stdoutBuffer += chunk.toString('utf-8');
@@ -578,13 +605,15 @@ export async function runAgentTurn(options: RunAgentTurnOptions): Promise<void> 
     }
 
     // Final check for thinking
-    pollTranscript();
+    await pollTranscriptAsync();
 
     // Final subagents broadcast
     try {
-      const finalSubs = getSubagentsForSession(sessionId);
-      if (finalSubs.length > 0) {
-        sessionEventHub.broadcast(sessionId, 'subagent_update', { subagents: finalSubs });
+      if (hasSubagents) {
+        const finalSubs = await getSubagentsForSessionAsync(sessionId);
+        if (finalSubs.length > 0) {
+          sessionEventHub.broadcast(sessionId, 'subagent_update', { subagents: finalSubs });
+        }
       }
     } catch {}
 

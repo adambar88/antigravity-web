@@ -49,6 +49,9 @@ export function getSubagentsForSession(sessionId: string): SubagentSession[] {
 
   try {
     const parentContent = fs.readFileSync(parentTranscriptPath, 'utf-8');
+    if (!parentContent.includes('invoke_subagent') && !parentContent.includes('conversationId')) {
+      return [];
+    }
     const lines = parentContent.split('\n');
 
     for (const line of lines) {
@@ -264,6 +267,230 @@ export function getSubagentsForSession(sessionId: string): SubagentSession[] {
   }
 
   // Sort subagents by creation date or steps count
+  return results.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+}
+
+/**
+ * Asynchronous version of getSubagentsForSession using fs.promises.readFile.
+ * Prevents blocking the event loop during live agent streaming.
+ */
+export async function getSubagentsForSessionAsync(sessionId: string): Promise<SubagentSession[]> {
+  const session = getSession(sessionId);
+  if (!session || !session.agy_conversation_id) {
+    return [];
+  }
+
+  const parentConvId = session.agy_conversation_id;
+  const parentTranscriptPath = path.join(
+    BRAIN_BASE_DIR,
+    parentConvId,
+    '.system_generated',
+    'logs',
+    'transcript.jsonl'
+  );
+
+  let parentContent: string;
+  try {
+    parentContent = await fs.promises.readFile(parentTranscriptPath, 'utf-8');
+  } catch {
+    return [];
+  }
+
+  if (!parentContent.includes('invoke_subagent') && !parentContent.includes('conversationId')) {
+    return [];
+  }
+
+  const subagentsMap = new Map<string, SubagentSession>();
+  let pendingInvocations: RawSubagentPlan[] = [];
+
+  try {
+    const lines = parentContent.split('\n');
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+
+      let parsed: any;
+      try {
+        parsed = JSON.parse(line);
+      } catch {
+        continue;
+      }
+
+      // 1. Detect invoke_subagent tool call in PLANNER_RESPONSE
+      if (parsed.tool_calls && Array.isArray(parsed.tool_calls)) {
+        for (const tc of parsed.tool_calls) {
+          if (tc.name === 'invoke_subagent') {
+            let subs = tc.args?.Subagents;
+            if (typeof subs === 'string') {
+              try {
+                subs = JSON.parse(subs);
+              } catch {
+                subs = [];
+              }
+            }
+            if (Array.isArray(subs)) {
+              pendingInvocations = subs.map((s: any) => ({
+                role: s.Role || s.TypeName || 'Subagent',
+                type: s.TypeName || 'subagent',
+                model: s.Model,
+                prompt: s.Prompt,
+              }));
+            }
+          }
+        }
+      }
+
+      // 2. Detect subagent creation confirmation in GENERIC output
+      if (parsed.type === 'GENERIC' && parsed.content) {
+        const content = parsed.content as string;
+
+        if (content.includes('Created the following subagents') || content.includes('conversationId')) {
+          const idMatches = [...content.matchAll(/"conversationId":\s*"([a-f0-9\-]{36})"/g)];
+          idMatches.forEach((match, idx) => {
+            const convId = match[1];
+            const info = pendingInvocations[idx] || { role: 'Subagent', type: 'subagent' };
+            const existing = subagentsMap.get(convId);
+
+            subagentsMap.set(convId, {
+              id: convId,
+              parentId: parentConvId,
+              role: existing?.role || info.role || 'Subagent',
+              type: existing?.type || info.type || 'subagent',
+              model: existing?.model || info.model || 'inherit',
+              prompt: existing?.prompt || info.prompt,
+              state: existing?.state || 'running',
+              stepsCount: existing?.stepsCount || 0,
+              transcriptUri: `file://${path.join(BRAIN_BASE_DIR, convId, '.system_generated', 'logs', 'transcript.jsonl')}`,
+            });
+          });
+        }
+      }
+
+      // 3. Detect subagent communication or updates via send_message
+      if (parsed.tool_calls && Array.isArray(parsed.tool_calls)) {
+        for (const tc of parsed.tool_calls) {
+          if (tc.name === 'send_message' && tc.args?.Recipient) {
+            const recipientId = tc.args.Recipient;
+            const sub = subagentsMap.get(recipientId);
+            if (sub) {
+              sub.lastActive = Date.now();
+            }
+          }
+        }
+      }
+
+      // 4. Detect completion messages or notifications from subagents
+      if (parsed.type === 'USER_INPUT' && parsed.content) {
+        const senderMatch = String(parsed.content).match(/sender:\s*([a-f0-9\-]{36})/i);
+        if (senderMatch) {
+          const senderId = senderMatch[1];
+          const sub = subagentsMap.get(senderId);
+          if (sub) {
+            sub.state = 'completed';
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error(`[subagentTracker:error:parent:${parentConvId}]`, err);
+  }
+
+  if (subagentsMap.size === 0) {
+    return [];
+  }
+
+  // Enrich each discovered subagent with data from its own transcript (async)
+  const results: SubagentSession[] = [];
+
+  for (const [id, sub] of subagentsMap.entries()) {
+    const subTranscriptPath = path.join(
+      BRAIN_BASE_DIR,
+      id,
+      '.system_generated',
+      'logs',
+      'transcript.jsonl'
+    );
+
+    try {
+      const subContent = await fs.promises.readFile(subTranscriptPath, 'utf-8');
+      const subLines = subContent.split('\n').filter((l) => l.trim());
+      sub.stepsCount = subLines.length;
+
+      if (subLines.length > 0) {
+        try {
+          const first = JSON.parse(subLines[0]);
+          if (!sub.prompt && first.content) {
+            const cleanPrompt = first.content
+              .replace(/<USER_REQUEST>([\s\S]*?)<\/USER_REQUEST>[\s\S]*/, '$1')
+              .trim();
+            sub.prompt = cleanPrompt || first.content.slice(0, 250);
+          }
+          if (first.created_at) {
+            sub.createdAt = new Date(first.created_at).getTime();
+          }
+        } catch {}
+
+        try {
+          const last = JSON.parse(subLines[subLines.length - 1]);
+          if (last.created_at) {
+            sub.lastActive = new Date(last.created_at).getTime();
+          }
+
+          if (last.status === 'ERROR') {
+            sub.state = 'errored';
+          } else if (last.type === 'PLANNER_RESPONSE' && !last.tool_calls) {
+            if (sub.state !== 'errored') {
+              sub.state = 'completed';
+            }
+          }
+
+          if (last.tool_calls && last.tool_calls.length > 0) {
+            const tc = last.tool_calls[0];
+            const summary =
+              tc.args?.toolSummary ||
+              tc.args?.toolAction ||
+              tc.args?.Instruction ||
+              tc.args?.Description ||
+              '';
+            sub.currentStep = summary
+              ? `${tc.name}: ${String(summary).replace(/^"|"$/g, '')}`
+              : tc.name;
+          } else if (last.thinking) {
+            const cleanThought = last.thinking.trim().replace(/\n+/g, ' ');
+            sub.currentStep = cleanThought.length > 80 ? cleanThought.slice(0, 80) + '...' : cleanThought;
+          } else if (last.content) {
+            const cleanContent = last.content.trim().replace(/\n+/g, ' ');
+            sub.currentStep = cleanContent.length > 80 ? cleanContent.slice(0, 80) + '...' : cleanContent;
+          }
+        } catch {}
+
+        const recentLogs: string[] = [];
+        const logSlice = subLines.slice(-6);
+        for (const rawLine of logSlice) {
+          try {
+            const entry = JSON.parse(rawLine);
+            if (entry.thinking) {
+              recentLogs.push(`💭 ${entry.thinking.slice(0, 100)}...`);
+            } else if (entry.tool_calls && entry.tool_calls.length > 0) {
+              recentLogs.push(`⚡ ${entry.tool_calls[0].name}`);
+            } else if (entry.type === 'GENERIC' && entry.content) {
+              const preview = entry.content.slice(0, 80).replace(/\n/g, ' ');
+              recentLogs.push(`📄 ${preview}`);
+            } else if (entry.content) {
+              const preview = entry.content.slice(0, 80).replace(/\n/g, ' ');
+              recentLogs.push(`💬 ${preview}`);
+            }
+          } catch {}
+        }
+        sub.recentLogs = recentLogs;
+      }
+    } catch {
+      // Transcript not created yet
+    }
+
+    results.push(sub);
+  }
+
   return results.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
 }
 
