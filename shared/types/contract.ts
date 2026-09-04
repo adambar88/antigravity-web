@@ -21,6 +21,7 @@ export interface Session {
   model: string;
   effort: ReasoningEffort;
   status: SessionStatus;
+  agy_conversation_id?: string | null;
   created_at: number; // ms
   updated_at: number; // ms
 }

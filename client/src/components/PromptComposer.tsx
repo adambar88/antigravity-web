@@ -61,10 +61,12 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
   disabled = false,
 }) => {
   const [text, setText] = useState('');
-  const [effort, setEffort] = useState<ReasoningEffort>('high');
+  const [effort, setEffort] = useState<ReasoningEffort>('medium');
+  const [selectedModel, setSelectedModel] = useState<string>('gemini-3.8-flash-medium');
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [selectedSlashIndex, setSelectedSlashIndex] = useState(0);
   const [showEffortMenu, setShowEffortMenu] = useState(false);
+  const [showModelMenu, setShowModelMenu] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -104,7 +106,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
     if (cmd.command === '/model') {
       setText('');
       setShowSlashMenu(false);
-      setShowEffortMenu(true);
+      setShowModelMenu(true);
       return;
     }
     // For /plan or /review, populate friendly text
@@ -152,7 +154,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
 
   const handleSubmit = () => {
     if (!text.trim() || isGenerating || disabled) return;
-    onSend(text.trim(), undefined, effort);
+    onSend(text.trim(), selectedModel, effort);
     setText('');
     setShowSlashMenu(false);
     if (textareaRef.current) {
@@ -165,6 +167,18 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
     medium: { title: 'Standardowa analiza', desc: 'Optymalny balans między szybkością a dokładnością' },
     low: { title: 'Szybka odpowiedź', desc: 'Krótkie wnioskowanie dla prostych pytań' },
   };
+
+  const modelOptions = [
+    { id: 'gemini-3.8-flash-medium', name: 'Gemini 3.8 Flash', tag: 'Domyślny' },
+    { id: 'gemini-3.8-flash-high', name: 'Gemini 3.8 Flash (High)', tag: 'Głęboki' },
+    { id: 'gemini-3.7-flash-high', name: 'Gemini 3.7 Flash', tag: 'Szybki' },
+    { id: 'gemini-3.1-pro-high', name: 'Gemini 3.1 Pro', tag: 'Pro' },
+    { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', tag: 'Thinking' },
+    { id: 'claude-opus-4-6-thinking', name: 'Claude Opus 4.6', tag: 'Reasoning' },
+    { id: 'gpt-oss-120b-medium', name: 'GPT-OSS 120B', tag: 'Open Source' },
+  ];
+
+  const currentModelName = modelOptions.find((m) => m.id === selectedModel)?.name || selectedModel;
 
   return (
     <div className="relative w-full max-w-4xl mx-auto px-4 pb-3">
@@ -222,43 +236,90 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
         />
 
         <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between pointer-events-auto">
-          <div className="relative flex items-center gap-1.5">
-            {/* Effort selector dropdown toggle */}
-            <button
-              type="button"
-              onClick={() => setShowEffortMenu(!showEffortMenu)}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium text-muted hover:text-main bg-card hover:bg-surface-hover border border-border transition-colors cursor-pointer"
-            >
-              <Sparkles className="w-3 h-3 text-primary" />
-              <span>{effortLabels[effort].title}</span>
-            </button>
+          <div className="relative flex items-center gap-1.5 flex-wrap">
+            {/* Model selector dropdown */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowModelMenu(!showModelMenu);
+                  setShowEffortMenu(false);
+                }}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium text-muted hover:text-main bg-card hover:bg-surface-hover border border-border transition-colors cursor-pointer"
+              >
+                <Brain className="w-3 h-3 text-primary" />
+                <span>{currentModelName}</span>
+              </button>
 
-            {showEffortMenu && (
-              <div className="absolute bottom-full mb-2 left-0 w-64 bg-surface border border-border rounded-xl shadow-lg p-1.5 z-40">
-                <div className="text-[11px] font-medium text-muted px-2 py-1">
-                  Wybierz poziom analizy:
+              {showModelMenu && (
+                <div className="absolute bottom-full mb-2 left-0 w-64 bg-surface border border-border rounded-xl shadow-lg p-1.5 z-40">
+                  <div className="text-[11px] font-medium text-muted px-2 py-1">
+                    Wybierz model Antigravity:
+                  </div>
+                  {modelOptions.map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedModel(opt.id);
+                        setShowModelMenu(false);
+                      }}
+                      className={`w-full flex items-center justify-between p-2 rounded-lg text-left text-xs transition-colors cursor-pointer ${
+                        selectedModel === opt.id ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-surface-hover text-main'
+                      }`}
+                    >
+                      <div>
+                        <div className="font-semibold">{opt.name}</div>
+                        <div className="text-[10px] text-muted">{opt.tag}</div>
+                      </div>
+                      {selectedModel === opt.id && <CheckCircle2 className="w-3.5 h-3.5 shrink-0 ml-2" />}
+                    </button>
+                  ))}
                 </div>
-                {(['high', 'medium', 'low'] as ReasoningEffort[]).map((eff) => (
-                  <button
-                    key={eff}
-                    type="button"
-                    onClick={() => {
-                      setEffort(eff);
-                      setShowEffortMenu(false);
-                    }}
-                    className={`w-full flex items-center justify-between p-2 rounded-lg text-left text-xs transition-colors cursor-pointer ${
-                      effort === eff ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-surface-hover text-main'
-                    }`}
-                  >
-                    <div>
-                      <div className="font-semibold">{effortLabels[eff].title}</div>
-                      <div className="text-[10px] text-muted leading-tight">{effortLabels[eff].desc}</div>
-                    </div>
-                    {effort === eff && <CheckCircle2 className="w-3.5 h-3.5 shrink-0 ml-2" />}
-                  </button>
-                ))}
-              </div>
-            )}
+              )}
+            </div>
+
+            {/* Effort selector dropdown toggle */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowEffortMenu(!showEffortMenu);
+                  setShowModelMenu(false);
+                }}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium text-muted hover:text-main bg-card hover:bg-surface-hover border border-border transition-colors cursor-pointer"
+              >
+                <Sparkles className="w-3 h-3 text-primary" />
+                <span>{effortLabels[effort].title}</span>
+              </button>
+
+              {showEffortMenu && (
+                <div className="absolute bottom-full mb-2 left-0 w-64 bg-surface border border-border rounded-xl shadow-lg p-1.5 z-40">
+                  <div className="text-[11px] font-medium text-muted px-2 py-1">
+                    Wybierz poziom analizy:
+                  </div>
+                  {(['high', 'medium', 'low'] as ReasoningEffort[]).map((eff) => (
+                    <button
+                      key={eff}
+                      type="button"
+                      onClick={() => {
+                        setEffort(eff);
+                        setShowEffortMenu(false);
+                      }}
+                      className={`w-full flex items-center justify-between p-2 rounded-lg text-left text-xs transition-colors cursor-pointer ${
+                        effort === eff ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-surface-hover text-main'
+                      }`}
+                    >
+                      <div>
+                        <div className="font-semibold">{effortLabels[eff].title}</div>
+                        <div className="text-[10px] text-muted leading-tight">{effortLabels[eff].desc}</div>
+                      </div>
+                      {effort === eff && <CheckCircle2 className="w-3.5 h-3.5 shrink-0 ml-2" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center gap-2">

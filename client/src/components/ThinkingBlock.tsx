@@ -61,9 +61,16 @@ export const ThinkingBlock: React.FC<ThinkingBlockProps> = React.memo(({
 
       {isOpen && (
         <div className="px-3.5 py-2.5 text-xs text-muted border-t border-border/40 font-mono whitespace-pre-wrap leading-relaxed max-h-64 overflow-y-auto bg-card-muted/30">
-          {thought || (
+          {thought ? (
+            thought
+          ) : isActive ? (
+            <span className="italic text-subtle flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary animate-ping" />
+              Wnioskowanie modelu i przygotowywanie narzędzi...
+            </span>
+          ) : (
             <span className="italic text-subtle">
-              Opracowywanie strategii rozwiązania zadania...
+              Brak dodatkowego toku myślenia dla tej odpowiedzi.
             </span>
           )}
         </div>

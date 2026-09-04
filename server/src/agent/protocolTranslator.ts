@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events';
 import path from 'node:path';
+import fs from 'node:fs';
 import { ManagedProcessGroup, processRegistry } from './processGroup.js';
 import {
   getSession,
@@ -7,6 +8,7 @@ import {
   updateSessionStatus,
   appendTurn,
   updateToolExecution,
+  updateMessage,
   getDatabase,
 } from '../db/index.js';
 import type {
@@ -239,8 +241,26 @@ export async function runAgentTurn(options: RunAgentTurnOptions): Promise<void> 
     throw new Error(`Session ${sessionId} not found`);
   }
 
-  const activeModel = options.model || session.model || 'gemini-3.8-flash-medium';
+  const requestedModel = options.model || session.model || 'gemini-3.8-flash-medium';
+  let activeModel = requestedModel;
+  if (activeModel === 'claude-3-7-sonnet') {
+    activeModel = 'claude-sonnet-4-6';
+  }
+
   const activeEffort = options.effort || session.effort || 'medium';
+
+  // Normalize model when effort is specified for gemini models
+  if (activeEffort) {
+    if (activeModel.startsWith('gemini-3.8-flash')) {
+      activeModel = `gemini-3.8-flash-${activeEffort}`;
+    } else if (activeModel.startsWith('gemini-3.7-flash')) {
+      activeModel = `gemini-3.7-flash-${activeEffort}`;
+    } else if (activeModel.startsWith('gemini-3.6-flash')) {
+      activeModel = `gemini-3.6-flash-${activeEffort}`;
+    } else if (activeModel.startsWith('gemini-3.1-pro')) {
+      activeModel = activeEffort === 'medium' ? 'gemini-3.1-pro-high' : `gemini-3.1-pro-${activeEffort}`;
+    }
+  }
 
   // 2. Persist User Message to DB
   appendTurn(sessionId, {
@@ -249,16 +269,60 @@ export async function runAgentTurn(options: RunAgentTurnOptions): Promise<void> 
     status: 'completed',
   });
 
+  // Prepare Assistant message placeholder in DB immediately to satisfy foreign keys
+  const assistantMsgId = crypto.randomUUID();
+  appendTurn(sessionId, {
+    id: assistantMsgId,
+    role: 'assistant',
+    content: '',
+    status: 'streaming',
+  });
+
   // Update session status to running
   updateSessionStatus(sessionId, 'running');
   sessionEventHub.broadcast(sessionId, 'session_status', { status: 'running' });
 
-  // Prepare Assistant message placeholder
-  const assistantMsgId = crypto.randomUUID();
   let accumulatedResponse = '';
   let accumulatedThought = '';
   let thoughtStartMs: number | null = null;
   let thoughtDurationMs: number | null = null;
+  let activeConversationId: string | null = session.agy_conversation_id || null;
+
+  // Helper to read live reasoning from transcript.jsonl
+  const pollTranscript = () => {
+    if (!activeConversationId) return;
+    const transcriptPath = path.join(
+      process.env.HOME || '/home/adam',
+      '.gemini/antigravity-cli/brain',
+      activeConversationId,
+      '.system_generated/logs/transcript.jsonl'
+    );
+    if (!fs.existsSync(transcriptPath)) return;
+    try {
+      const content = fs.readFileSync(transcriptPath, 'utf-8');
+      const lines = content.split('\n');
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const stepObj = JSON.parse(line);
+          if (stepObj.thinking && stepObj.type === 'PLANNER_RESPONSE') {
+            const thoughtText = stepObj.thinking.trim();
+            if (thoughtText && thoughtText !== accumulatedThought) {
+              accumulatedThought = thoughtText;
+              sessionEventHub.broadcast(sessionId, 'thought_delta', {
+                step_index: stepObj.step_index ?? 0,
+                delta: thoughtText,
+              });
+            }
+          }
+        } catch {
+          // ignore malformed line
+        }
+      }
+    } catch {
+      // non-fatal
+    }
+  };
 
   // Active tool state map (step_index -> ToolState)
   interface ActiveTool {
@@ -281,13 +345,28 @@ export async function runAgentTurn(options: RunAgentTurnOptions): Promise<void> 
     '--dangerously-skip-permissions',
     '--model',
     activeModel,
-    '--effort',
-    activeEffort,
     '--print-timeout',
     '10m',
   ];
 
-  const cwd = session.workspace_path || process.cwd();
+  // Only pass --effort if model does not already encode effort and is not claude/gpt
+  const modelHasEffortSuffix = /-(low|medium|high)$/.test(activeModel);
+  const isExcludedFromEffortFlag =
+    activeModel.startsWith('claude-') ||
+    activeModel.startsWith('gpt-oss-') ||
+    modelHasEffortSuffix;
+  if (!isExcludedFromEffortFlag && activeEffort) {
+    args.push('--effort', activeEffort);
+  }
+
+  const cwd = session.workspace_path || process.env.WORKSPACE_ROOT || '/home/adam/projects/my-domain';
+
+  // Continue existing Antigravity conversation context if available
+  if (session.agy_conversation_id) {
+    args.push('--conversation', session.agy_conversation_id);
+  } else if (cwd) {
+    args.push('--add-dir', cwd);
+  }
 
   // 3. Spawn managed POSIX process group
   const proc = new ManagedProcessGroup({
@@ -307,7 +386,6 @@ export async function runAgentTurn(options: RunAgentTurnOptions): Promise<void> 
   });
 
   proc.writeStdin(inputMessage + '\n');
-  proc.closeStdin();
 
   // 5. Line-delimited NDJSON parser on stdout
   let stdoutBuffer = '';
@@ -325,15 +403,23 @@ export async function runAgentTurn(options: RunAgentTurnOptions): Promise<void> 
 
     const event = parsed.event;
 
+    // Capture conversation ID for multi-turn continuation and transcript reading
+    if (event === 'init' && parsed.conversation_id) {
+      activeConversationId = parsed.conversation_id;
+      updateSession(sessionId, { agy_conversation_id: parsed.conversation_id });
+    }
+
     if (event === 'step_update' && parsed.step_update) {
       const step = parsed.step_update;
       const stepIndex = step.step_index ?? 0;
       const stepType = step.step_type;
       const state = step.state;
 
+      // Check transcript for thinking tokens
+      pollTranscript();
+
       // --- AGENT RESPONSE / THOUGHT ---
       if (stepType === 'agent_response') {
-        // Thinking tokens indicator
         if (step.usage?.thinking_tokens && !thoughtStartMs) {
           thoughtStartMs = Date.now();
         }
@@ -350,6 +436,7 @@ export async function runAgentTurn(options: RunAgentTurnOptions): Promise<void> 
 
         // Response step completion
         if (state === 'DONE') {
+          pollTranscript();
           if (thoughtStartMs && !thoughtDurationMs) {
             thoughtDurationMs = Math.round(
               step.duration_seconds
@@ -358,7 +445,7 @@ export async function runAgentTurn(options: RunAgentTurnOptions): Promise<void> 
             );
             const thoughtPayload: ThoughtCompletePayload = {
               step_index: stepIndex,
-              thought: accumulatedThought || 'Reasoned over plan and tool operations.',
+              thought: accumulatedThought || 'Analiza i wykonanie planu operacyjnego.',
               duration_ms: thoughtDurationMs,
             };
             sessionEventHub.broadcast(sessionId, 'thought_complete', thoughtPayload);
@@ -445,16 +532,20 @@ export async function runAgentTurn(options: RunAgentTurnOptions): Promise<void> 
           }
 
           // Persist tool execution
-          updateToolExecution(sessionId, {
-            id: toolId,
-            message_id: assistantMsgId,
-            tool_name: toolName,
-            tool_args: toolArgs,
-            tool_result: typeof output === 'string' ? output : JSON.stringify(output),
-            status: 'completed',
-            duration_ms: durationMs,
-            diffs,
-          });
+          try {
+            updateToolExecution(sessionId, {
+              id: toolId,
+              message_id: assistantMsgId,
+              tool_name: toolName,
+              tool_args: toolArgs,
+              tool_result: typeof output === 'string' ? output : JSON.stringify(output),
+              status: 'completed',
+              duration_ms: durationMs,
+              diffs,
+            });
+          } catch (dbErr) {
+            console.error('[db:updateToolExecution:error]', dbErr);
+          }
 
           const completePayload: ToolCompletePayload = {
             tool_execution_id: toolId,
@@ -474,9 +565,19 @@ export async function runAgentTurn(options: RunAgentTurnOptions): Promise<void> 
     // --- RESULT ---
     if (event === 'result' && parsed.result) {
       const res = parsed.result;
-      if (res.response && !accumulatedResponse) {
+      if (res.status === 'ERROR') {
+        const errMsg = res.error || 'Antigravity execution failed';
+        accumulatedResponse = `⚠️ **Błąd wykonania zadania:**\n\n\`\`\`\n${errMsg}\n\`\`\``;
+        sessionEventHub.broadcast(sessionId, 'turn_error', { message: errMsg });
+      } else if (res.response) {
         accumulatedResponse = res.response;
       }
+
+      // Close child stdin upon receiving turn result so it exits cleanly
+      proc.closeStdin();
+
+      // Final transcript poll
+      pollTranscript();
 
       const completePayload: MessageCompletePayload = {
         message_id: assistantMsgId,
@@ -504,9 +605,10 @@ export async function runAgentTurn(options: RunAgentTurnOptions): Promise<void> 
     }
   });
 
+  let stderrBuffer = '';
   proc.child.stderr?.on('data', (chunk: Buffer) => {
     const text = chunk.toString('utf-8');
-    // Non-fatal stderr logging
+    stderrBuffer += text;
     console.error(`[agy:${sessionId}:stderr]`, text.trim());
   });
 
@@ -518,16 +620,33 @@ export async function runAgentTurn(options: RunAgentTurnOptions): Promise<void> 
       stdoutBuffer = '';
     }
 
-    const finalStatus = exitResult.code === 0 ? 'idle' : 'idle';
+    // Final check for thinking
+    pollTranscript();
 
-    // Persist Assistant message to SQLite
-    appendTurn(sessionId, {
-      id: assistantMsgId,
-      role: 'assistant',
-      content: accumulatedResponse || 'Task executed.',
+    const finalStatus = 'idle';
+
+    let finalContent = accumulatedResponse;
+    if (!finalContent) {
+      if (exitResult.code === 0) {
+        finalContent = 'Zadanie zostało zakończone.';
+      } else {
+        finalContent = `⚠️ **Błąd wykonania zadania (kod ${exitResult.code}):**\n\n\`\`\`\n${stderrBuffer.trim() || 'Nieznany błąd wykonania agy'}\n\`\`\``;
+        sessionEventHub.broadcast(sessionId, 'turn_error', {
+          message: stderrBuffer.trim() || `Proces zakończył się kodem błędu ${exitResult.code}`,
+        });
+      }
+      sessionEventHub.broadcast(sessionId, 'message_complete', {
+        message_id: assistantMsgId,
+        content: finalContent,
+      });
+    }
+
+    // Update the Assistant message in SQLite
+    updateMessage(assistantMsgId, {
+      content: finalContent,
       thought: accumulatedThought || null,
       thought_duration_ms: thoughtDurationMs || null,
-      status: 'completed',
+      status: exitResult.code === 0 ? 'completed' : 'failed',
     });
 
     updateSessionStatus(sessionId, finalStatus);
@@ -535,6 +654,10 @@ export async function runAgentTurn(options: RunAgentTurnOptions): Promise<void> 
   } catch (err: any) {
     sessionEventHub.broadcast(sessionId, 'turn_error', {
       error: err.message || 'Error occurred during agent turn execution',
+    });
+    updateMessage(assistantMsgId, {
+      content: `⚠️ Wystąpił błąd: ${err.message}`,
+      status: 'failed',
     });
     updateSessionStatus(sessionId, 'failed');
     sessionEventHub.broadcast(sessionId, 'session_status', { status: 'failed' });

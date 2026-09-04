@@ -149,8 +149,8 @@ export function useSessionStream(sessionId: string | null) {
           id: sessionId!,
           title: 'Nowe zadanie',
           workspace_path: '/home/adam/projects/my-domain',
-          model: 'claude-3-7-sonnet',
-          effort: 'high',
+          model: 'gemini-3.8-flash-medium',
+          effort: 'medium',
           status: 'idle',
           created_at: Date.now(),
           updated_at: Date.now(),
@@ -400,30 +400,20 @@ export function useSessionStream(sessionId: string | null) {
 
       try {
         await api.sendPrompt(sessionId, promptText.trim(), model, effort);
-      } catch (err) {
-        console.warn('Błąd podczas wysyłania zapytania:', err);
-        // If server is not responding, gracefully simulate assistance so the user can test UI
-        setTimeout(() => {
-          setCurrentThought({
-            isActive: false,
-            thought: 'Analizuję strukturę projektu i przygotowuję odpowiedź...',
-            durationMs: 1200,
-            startTime: Date.now() - 1200,
-          });
-          const reply: Message = {
-            id: `assistant-${Date.now()}`,
-            session_id: sessionId,
-            sequence_num: messages.length + 2,
-            role: 'assistant',
-            content: `Otrzymałem Twoje zapytanie: "${promptText}". Połączono z interfejsem Antigravity Web. Jeśli serwer wykonawczy jest aktywny, polecenia są przekazywane na bieżąco.`,
-            thought: 'Zadanie zostało pomyślnie zinterpretowane.',
-            thought_duration_ms: 1200,
-            status: 'completed',
-            created_at: Date.now(),
-          };
-          setMessages((prev) => [...prev, reply]);
-          setIsGenerating(false);
-        }, 1500);
+      } catch (err: any) {
+        console.error('Błąd podczas wysyłania zapytania:', err);
+        setIsGenerating(false);
+        setCurrentThought({ isActive: false, thought: '', durationMs: 0, startTime: 0 });
+        const errMsg: Message = {
+          id: `err-${Date.now()}`,
+          session_id: sessionId,
+          sequence_num: messages.length + 2,
+          role: 'system',
+          content: `⚠️ **Błąd:** ${err.message || 'Nie udało się nawiązać połączenia z serwerem.'}`,
+          status: 'failed',
+          created_at: Date.now(),
+        };
+        setMessages((prev) => [...prev, errMsg]);
       }
     },
     [sessionId, messages.length]

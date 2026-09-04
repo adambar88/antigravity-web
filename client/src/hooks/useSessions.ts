@@ -42,10 +42,10 @@ export function useSessions() {
       if (sessions.length === 0) {
         const fallbackSession: SessionSummary = {
           id: 'default-session',
-          title: 'Nowy projekt',
+          title: 'Nowe zadanie',
           workspace_path: '/home/adam/projects/my-domain',
-          model: 'claude-3-7-sonnet',
-          effort: 'high',
+          model: 'gemini-3.8-flash-medium',
+          effort: 'medium',
           status: 'idle',
           created_at: Date.now(),
           updated_at: Date.now(),
@@ -71,8 +71,8 @@ export function useSessions() {
         const newSession = await api.createSession({
           title: req?.title || 'Nowe zadanie',
           workspace_path: req?.workspace_path || '/home/adam/projects/my-domain',
-          model: req?.model || 'claude-3-7-sonnet',
-          effort: req?.effort || 'high',
+          model: req?.model || 'gemini-3.8-flash-medium',
+          effort: req?.effort || 'medium',
         });
 
         const summary: SessionSummary = {
@@ -91,8 +91,8 @@ export function useSessions() {
           id: `session-${Date.now()}`,
           title: req?.title || 'Nowe zadanie',
           workspace_path: '/home/adam/projects/my-domain',
-          model: 'claude-3-7-sonnet',
-          effort: req?.effort || 'high',
+          model: 'gemini-3.8-flash-medium',
+          effort: req?.effort || 'medium',
           status: 'idle',
           created_at: Date.now(),
           updated_at: Date.now(),

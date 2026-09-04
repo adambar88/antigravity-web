@@ -64,9 +64,11 @@ function initSchema(db: Database.Database): void {
       model TEXT NOT NULL,
       effort TEXT NOT NULL,
       status TEXT NOT NULL,
+      agy_conversation_id TEXT,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     );
+
 
     CREATE TABLE IF NOT EXISTS messages (
       id TEXT PRIMARY KEY,
@@ -128,6 +130,12 @@ function initSchema(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_file_diffs_tool ON file_diffs(tool_execution_id);
     CREATE INDEX IF NOT EXISTS idx_artifacts_session ON artifacts(session_id);
   `);
+
+  try {
+    db.exec('ALTER TABLE sessions ADD COLUMN agy_conversation_id TEXT;');
+  } catch {
+    // Column already exists
+  }
 }
 
 // ============================================================================
@@ -140,23 +148,25 @@ export interface CreateSessionParams {
   workspace_path?: string;
   model?: string;
   effort?: ReasoningEffort;
+  agy_conversation_id?: string | null;
 }
 
 export function createSession(params: CreateSessionParams, db = getDatabase()): Session {
   const now = Date.now();
   const id = params.id || crypto.randomUUID();
   const title = params.title || 'New Session';
-  const workspace_path = params.workspace_path || process.cwd();
+  const workspace_path = params.workspace_path || process.env.WORKSPACE_ROOT || '/home/adam/projects/my-domain';
   const model = params.model || 'gemini-3.8-flash-medium';
   const effort = params.effort || 'medium';
   const status: SessionStatus = 'idle';
+  const agy_conversation_id = params.agy_conversation_id || null;
 
   const stmt = db.prepare(`
-    INSERT INTO sessions (id, title, workspace_path, model, effort, status, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO sessions (id, title, workspace_path, model, effort, status, agy_conversation_id, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
-  stmt.run(id, title, workspace_path, model, effort, status, now, now);
+  stmt.run(id, title, workspace_path, model, effort, status, agy_conversation_id, now, now);
 
   return {
     id,
@@ -165,6 +175,7 @@ export function createSession(params: CreateSessionParams, db = getDatabase()): 
     model,
     effort,
     status,
+    agy_conversation_id,
     created_at: now,
     updated_at: now,
   };
@@ -173,7 +184,7 @@ export function createSession(params: CreateSessionParams, db = getDatabase()): 
 export function listSessions(db = getDatabase()): SessionSummary[] {
   const query = `
     SELECT 
-      s.id, s.title, s.workspace_path, s.model, s.effort, s.status, s.created_at, s.updated_at,
+      s.id, s.title, s.workspace_path, s.model, s.effort, s.status, s.agy_conversation_id, s.created_at, s.updated_at,
       COALESCE(m.msg_count, 0) AS message_count,
       COALESCE(t.tool_count, 0) AS tool_count,
       lm.content AS last_message_preview
@@ -207,6 +218,7 @@ export function listSessions(db = getDatabase()): SessionSummary[] {
     model: string;
     effort: ReasoningEffort;
     status: SessionStatus;
+    agy_conversation_id: string | null;
     created_at: number;
     updated_at: number;
     message_count: number;
@@ -221,6 +233,7 @@ export function listSessions(db = getDatabase()): SessionSummary[] {
     model: r.model,
     effort: r.effort,
     status: r.status,
+    agy_conversation_id: r.agy_conversation_id,
     created_at: r.created_at,
     updated_at: r.updated_at,
     message_count: r.message_count,
@@ -288,10 +301,10 @@ export function getSessionWithHistory(id: string, db = getDatabase()): HydratedS
 
   // 4. Fetch artifacts
   const artifactRows = db.prepare(`
-    SELECT * FROM artifacts WHERE session_id = ? ORDER BY created_at ASC
+    SELECT * FROM artifacts WHERE session_id = ? ORDER BY created_at DESC
   `).all(id) as Artifact[];
 
-  // Group diffs by tool_execution_id
+  // Stitch diffs into tool executions
   const diffsByToolId = new Map<string, FileDiff[]>();
   for (const diff of diffRows) {
     const list = diffsByToolId.get(diff.tool_execution_id) || [];
@@ -299,14 +312,14 @@ export function getSessionWithHistory(id: string, db = getDatabase()): HydratedS
     diffsByToolId.set(diff.tool_execution_id, list);
   }
 
-  // Group tools by message_id
+  // Stitch tool executions into messages
   const toolsByMessageId = new Map<string, ToolExecution[]>();
   for (const row of toolRows) {
     let parsedArgs: Record<string, unknown> = {};
     try {
       parsedArgs = JSON.parse(row.tool_args);
     } catch {
-      parsedArgs = {};
+      parsedArgs = { raw: row.tool_args };
     }
 
     const toolExecution: ToolExecution = {
@@ -350,7 +363,7 @@ export function getSessionWithHistory(id: string, db = getDatabase()): HydratedS
 
 export function updateSession(
   id: string,
-  updates: Partial<Pick<Session, 'title' | 'model' | 'effort' | 'status' | 'workspace_path'>>,
+  updates: Partial<Pick<Session, 'title' | 'model' | 'effort' | 'status' | 'workspace_path' | 'agy_conversation_id'>>,
   db = getDatabase()
 ): Session | null {
   const existing = getSession(id, db);
@@ -362,12 +375,13 @@ export function updateSession(
   const effort = updates.effort ?? existing.effort;
   const status = updates.status ?? existing.status;
   const workspace_path = updates.workspace_path ?? existing.workspace_path;
+  const agy_conversation_id = updates.agy_conversation_id !== undefined ? updates.agy_conversation_id : existing.agy_conversation_id;
 
   db.prepare(`
     UPDATE sessions
-    SET title = ?, model = ?, effort = ?, status = ?, workspace_path = ?, updated_at = ?
+    SET title = ?, model = ?, effort = ?, status = ?, workspace_path = ?, agy_conversation_id = ?, updated_at = ?
     WHERE id = ?
-  `).run(title, model, effort, status, workspace_path, now, id);
+  `).run(title, model, effort, status, workspace_path, agy_conversation_id, now, id);
 
   return {
     ...existing,
@@ -376,6 +390,7 @@ export function updateSession(
     effort,
     status,
     workspace_path,
+    agy_conversation_id,
     updated_at: now,
   };
 }
@@ -383,6 +398,30 @@ export function updateSession(
 export function updateSessionStatus(id: string, status: SessionStatus, db = getDatabase()): void {
   const now = Date.now();
   db.prepare('UPDATE sessions SET status = ?, updated_at = ? WHERE id = ?').run(status, now, id);
+}
+
+export function updateMessage(
+  id: string,
+  updates: {
+    content?: string;
+    thought?: string | null;
+    thought_duration_ms?: number | null;
+    status?: 'pending' | 'streaming' | 'completed' | 'failed';
+  },
+  db = getDatabase()
+): void {
+  const current = db.prepare('SELECT * FROM messages WHERE id = ?').get(id) as any;
+  if (!current) return;
+  const content = updates.content !== undefined ? updates.content : current.content;
+  const thought = updates.thought !== undefined ? updates.thought : current.thought;
+  const thought_duration_ms = updates.thought_duration_ms !== undefined ? updates.thought_duration_ms : current.thought_duration_ms;
+  const status = updates.status !== undefined ? updates.status : current.status;
+
+  db.prepare(`
+    UPDATE messages
+    SET content = ?, thought = ?, thought_duration_ms = ?, status = ?
+    WHERE id = ?
+  `).run(content, thought, thought_duration_ms, status, id);
 }
 
 export function deleteSession(id: string, db = getDatabase()): boolean {
