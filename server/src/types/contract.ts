@@ -152,11 +152,26 @@ export interface WorkspaceTreeResponse {
   tree: WorkspaceTreeNode[];
 }
 
+export type FileCategory =
+  | 'text'
+  | 'code'
+  | 'markdown'
+  | 'image'
+  | 'audio'
+  | 'video'
+  | 'pdf'
+  | 'json'
+  | 'binary';
+
 export interface WorkspaceFileResponse {
   path: string;
   content: string;
   size: number;
   modified: number;
+  category?: FileCategory;
+  mimeType?: string;
+  dataUrl?: string;
+  isBinary?: boolean;
 }
 
 // ============================================================================

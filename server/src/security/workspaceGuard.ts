@@ -1,6 +1,6 @@
 import path from 'node:path';
 import fs from 'node:fs';
-import type { WorkspaceTreeNode, WorkspaceFileResponse } from '../types/contract.js';
+import type { WorkspaceTreeNode, WorkspaceFileResponse, FileCategory } from '../types/contract.js';
 
 export class WorkspaceSecurityError extends Error {
   statusCode: number;
@@ -155,27 +155,157 @@ export function resolveWorkspacePath(workspaceRoot: string, targetPath: string):
 /**
  * Recursively builds a filtered workspace directory tree up to maxDepth.
  */
+/**
+ * Detects file category, MIME type and binary flag from file extension or content.
+ */
+export function getFileCategoryAndMime(filePath: string): {
+  category: FileCategory;
+  mimeType: string;
+  isBinary: boolean;
+} {
+  const ext = path.extname(filePath).toLowerCase().replace('.', '');
+  const basename = path.basename(filePath).toLowerCase();
+
+  // Images
+  const imageMimes: Record<string, string> = {
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    gif: 'image/gif',
+    svg: 'image/svg+xml',
+    webp: 'image/webp',
+    ico: 'image/x-icon',
+    bmp: 'image/bmp',
+    avif: 'image/avif',
+  };
+  if (imageMimes[ext]) {
+    return { category: 'image', mimeType: imageMimes[ext], isBinary: ext !== 'svg' };
+  }
+
+  // Markdown
+  if (ext === 'md' || ext === 'markdown' || ext === 'mdx') {
+    return { category: 'markdown', mimeType: 'text/markdown; charset=utf-8', isBinary: false };
+  }
+
+  // PDF
+  if (ext === 'pdf') {
+    return { category: 'pdf', mimeType: 'application/pdf', isBinary: true };
+  }
+
+  // Audio
+  const audioMimes: Record<string, string> = {
+    mp3: 'audio/mpeg',
+    wav: 'audio/wav',
+    ogg: 'audio/ogg',
+    aac: 'audio/aac',
+    m4a: 'audio/mp4',
+    flac: 'audio/flac',
+  };
+  if (audioMimes[ext]) {
+    return { category: 'audio', mimeType: audioMimes[ext], isBinary: true };
+  }
+
+  // Video
+  const videoMimes: Record<string, string> = {
+    mp4: 'video/mp4',
+    webm: 'video/webm',
+    ogv: 'video/ogg',
+    mov: 'video/quicktime',
+    mkv: 'video/x-matroska',
+  };
+  if (videoMimes[ext]) {
+    return { category: 'video', mimeType: videoMimes[ext], isBinary: true };
+  }
+
+  // JSON
+  if (ext === 'json') {
+    return { category: 'json', mimeType: 'application/json; charset=utf-8', isBinary: false };
+  }
+
+  // Code
+  const codeExtensions = new Set([
+    'ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs',
+    'py', 'pyw', 'sh', 'bash', 'zsh', 'fish',
+    'html', 'htm', 'css', 'scss', 'sass', 'less',
+    'yml', 'yaml', 'toml', 'ini', 'cfg', 'conf',
+    'sql', 'graphql', 'gql',
+    'go', 'rs', 'java', 'kt', 'kts',
+    'c', 'cpp', 'cc', 'cxx', 'h', 'hpp',
+    'cs', 'php', 'rb', 'lua', 'swift', 'r',
+    'vue', 'svelte', 'astro',
+    'dockerfile', 'dockerignore', 'gitignore', 'env',
+  ]);
+
+  if (codeExtensions.has(ext) || basename === 'dockerfile' || basename === 'makefile') {
+    return { category: 'code', mimeType: 'text/plain; charset=utf-8', isBinary: false };
+  }
+
+  // Plain text / logs / CSV
+  if (ext === 'txt' || ext === 'log' || ext === 'csv' || ext === 'tsv') {
+    return { category: 'text', mimeType: 'text/plain; charset=utf-8', isBinary: false };
+  }
+
+  return { category: 'binary', mimeType: 'application/octet-stream', isBinary: true };
+}
+
+/**
+ * Recursively builds a filtered workspace directory tree up to maxDepth with symlink resolution.
+ */
 export async function getWorkspaceTree(
   workspaceRoot: string,
-  maxDepth = 4,
+  maxDepth = 8,
   currentDepth = 0,
-  currentDir = workspaceRoot
+  currentDir = workspaceRoot,
+  visited = new Set<string>()
 ): Promise<WorkspaceTreeNode[]> {
   const rootCanonical = fs.realpathSync(workspaceRoot);
-  const dirCanonical = fs.realpathSync(currentDir);
+  let dirCanonical = currentDir;
+  try {
+    dirCanonical = fs.realpathSync(currentDir);
+  } catch {
+    return [];
+  }
+
+  if (visited.has(dirCanonical)) {
+    return [];
+  }
+  visited.add(dirCanonical);
 
   if (currentDepth >= maxDepth) {
     return [];
   }
 
-  const entries = await fs.promises.readdir(dirCanonical, { withFileTypes: true });
+  let entries: fs.Dirent[] = [];
+  try {
+    entries = await fs.promises.readdir(currentDir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+
   const result: WorkspaceTreeNode[] = [];
 
   for (const entry of entries) {
-    const fullPath = path.join(dirCanonical, entry.name);
+    const fullPath = path.join(currentDir, entry.name);
     const relativePath = path.relative(rootCanonical, fullPath);
 
-    if (entry.isDirectory()) {
+    let isDir = entry.isDirectory();
+    let isF = entry.isFile();
+
+    // Properly inspect symlinks to identify if target is directory or file
+    if (entry.isSymbolicLink()) {
+      try {
+        const targetStat = await fs.promises.stat(fullPath);
+        if (targetStat.isDirectory()) {
+          isDir = true;
+        } else if (targetStat.isFile()) {
+          isF = true;
+        }
+      } catch {
+        continue;
+      }
+    }
+
+    if (isDir) {
       if (IGNORED_DIRECTORIES.has(entry.name)) {
         continue;
       }
@@ -184,7 +314,8 @@ export async function getWorkspaceTree(
         rootCanonical,
         maxDepth,
         currentDepth + 1,
-        fullPath
+        fullPath,
+        new Set(visited)
       );
 
       result.push({
@@ -193,7 +324,7 @@ export async function getWorkspaceTree(
         type: 'directory',
         children,
       });
-    } else if (entry.isFile()) {
+    } else if (isF) {
       if (isSensitivePath(relativePath)) {
         continue;
       }
@@ -227,7 +358,77 @@ export async function getWorkspaceTree(
 }
 
 /**
- * Reads a workspace file after canonical security verification.
+ * Returns immediate children of a specific directory inside the workspace.
+ * Enables infinite on-demand drilldown for deeply nested directories.
+ */
+export async function getWorkspaceDirectoryChildren(
+  workspaceRoot: string,
+  relativeDirPath: string
+): Promise<WorkspaceTreeNode[]> {
+  const rootCanonical = fs.realpathSync(workspaceRoot);
+  const resolved = resolveWorkspacePath(workspaceRoot, relativeDirPath || '.');
+  const stats = await fs.promises.stat(resolved);
+
+  if (!stats.isDirectory()) {
+    throw new WorkspaceSecurityError(`Path is not a directory: ${relativeDirPath}`, 400);
+  }
+
+  const entries = await fs.promises.readdir(resolved, { withFileTypes: true });
+  const result: WorkspaceTreeNode[] = [];
+
+  for (const entry of entries) {
+    const fullPath = path.join(resolved, entry.name);
+    const relativePath = path.relative(rootCanonical, fullPath);
+
+    let isDir = entry.isDirectory();
+    let isF = entry.isFile();
+
+    if (entry.isSymbolicLink()) {
+      try {
+        const targetStat = await fs.promises.stat(fullPath);
+        isDir = targetStat.isDirectory();
+        isF = targetStat.isFile();
+      } catch {
+        continue;
+      }
+    }
+
+    if (isDir) {
+      if (IGNORED_DIRECTORIES.has(entry.name)) continue;
+      result.push({
+        name: entry.name,
+        path: relativePath,
+        type: 'directory',
+        children: [],
+      });
+    } else if (isF) {
+      if (isSensitivePath(relativePath)) continue;
+      let size = 0;
+      try {
+        const s = await fs.promises.stat(fullPath);
+        size = s.size;
+      } catch {}
+
+      result.push({
+        name: entry.name,
+        path: relativePath,
+        type: 'file',
+        size,
+      });
+    }
+  }
+
+  result.sort((a, b) => {
+    if (a.type !== b.type) return a.type === 'directory' ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  return result;
+}
+
+/**
+ * Reads a workspace file after canonical security verification, supporting all formats:
+ * text, code, markdown, images, audio, video, PDF, and binary.
  */
 export async function readWorkspaceFile(
   workspaceRoot: string,
@@ -240,17 +441,53 @@ export async function readWorkspaceFile(
     throw new WorkspaceSecurityError(`Path is not a regular file: ${relativePath}`, 400);
   }
 
-  // Limit file reading size to 5MB to prevent memory exhaustion
-  if (stats.size > 5 * 1024 * 1024) {
-    throw new WorkspaceSecurityError(`File exceeds maximum readable size limit (5MB)`, 413);
+  // Limit file reading size to 25MB to prevent memory exhaustion
+  if (stats.size > 25 * 1024 * 1024) {
+    throw new WorkspaceSecurityError(`Plik przekracza limit rozmiaru podglądu (25MB)`, 413);
   }
 
-  const content = await fs.promises.readFile(resolved, 'utf-8');
+  const { category, mimeType, isBinary } = getFileCategoryAndMime(resolved);
+  const buffer = await fs.promises.readFile(resolved);
 
+  // For images, audio, video, and PDF: embed base64 dataUrl for instant rich preview
+  if (category === 'image' || category === 'audio' || category === 'video' || category === 'pdf') {
+    const rawMime = mimeType.split(';')[0];
+    const dataUrl = `data:${rawMime};base64,${buffer.toString('base64')}`;
+    return {
+      path: path.relative(fs.realpathSync(workspaceRoot), resolved),
+      content: '',
+      dataUrl,
+      size: stats.size,
+      modified: Math.floor(stats.mtimeMs),
+      category,
+      mimeType,
+      isBinary: true,
+    };
+  }
+
+  // Binary files: hex dump of first 256 bytes
+  if (isBinary) {
+    const hexSlice = buffer.subarray(0, 256).toString('hex').match(/.{1,2}/g)?.join(' ') || '';
+    return {
+      path: path.relative(fs.realpathSync(workspaceRoot), resolved),
+      content: hexSlice,
+      size: stats.size,
+      modified: Math.floor(stats.mtimeMs),
+      category: 'binary',
+      mimeType,
+      isBinary: true,
+    };
+  }
+
+  // Text, code, markdown, json
+  const content = buffer.toString('utf-8');
   return {
     path: path.relative(fs.realpathSync(workspaceRoot), resolved),
     content,
     size: stats.size,
     modified: Math.floor(stats.mtimeMs),
+    category,
+    mimeType,
+    isBinary: false,
   };
 }

@@ -13,6 +13,7 @@ import {
   SessionSummary,
   UpdateSessionRequest,
   WorkspaceFileResponse,
+  WorkspaceTreeNode,
   WorkspaceTreeResponse,
 } from '@/types';
 
@@ -134,5 +135,27 @@ export const api = {
       directories: { path: string; name: string }[];
       common: { path: string; name: string }[];
     }>(res);
+  },
+
+  async getWorkspaceChildren(folderPath: string, root?: string): Promise<{
+    root: string;
+    path: string;
+    children: WorkspaceTreeNode[];
+  }> {
+    const params = new URLSearchParams({ path: folderPath });
+    if (root) params.set('root', root);
+    const res = await fetch(`${BASE_URL}/workspace/children?${params.toString()}`);
+    return handleResponse<{
+      root: string;
+      path: string;
+      children: WorkspaceTreeNode[];
+    }>(res);
+  },
+
+  getWorkspaceRawUrl(filePath: string, root?: string, download = false): string {
+    const params = new URLSearchParams({ path: filePath });
+    if (root) params.set('root', root);
+    if (download) params.set('download', '1');
+    return `${BASE_URL}/workspace/raw?${params.toString()}`;
   },
 };
