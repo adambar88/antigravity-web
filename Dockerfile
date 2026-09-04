@@ -41,7 +41,8 @@ ENV WORKSPACE_ROOT=/home/adam/projects/my-domain
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y python3 make g++ git bash curl && rm -rf /var/lib/apt/lists/* \
-  && git config --global --add safe.directory "*"
+  && mkdir -p /home/adam \
+  && git config --system --add safe.directory "*"
 
 COPY package*.json ./
 COPY client/package*.json ./client/
