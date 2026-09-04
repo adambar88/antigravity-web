@@ -17,6 +17,7 @@ import {
   WorkspaceFileResponse,
   WorkspaceTreeNode,
   WorkspaceTreeResponse,
+  WorkspaceDirectoriesResponse,
   SubagentSession,
   SubagentDetailResponse,
 } from '@/types';
@@ -128,18 +129,10 @@ export const api = {
     return handleResponse<WorkspaceFileResponse>(res);
   },
 
-  async getWorkspaceDirectories(path?: string): Promise<{
-    base: string;
-    directories: { path: string; name: string }[];
-    common: { path: string; name: string }[];
-  }> {
+  async getWorkspaceDirectories(path?: string): Promise<WorkspaceDirectoriesResponse> {
     const params = path ? `?path=${encodeURIComponent(path)}` : '';
     const res = await fetch(`${BASE_URL}/workspace/directories${params}`);
-    return handleResponse<{
-      base: string;
-      directories: { path: string; name: string }[];
-      common: { path: string; name: string }[];
-    }>(res);
+    return handleResponse<WorkspaceDirectoriesResponse>(res);
   },
 
   async getWorkspaceChildren(folderPath: string, root?: string): Promise<{

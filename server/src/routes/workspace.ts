@@ -12,17 +12,20 @@ import {
   resolveWorkspacePath,
 } from '../security/workspaceGuard.js';
 import { collectWorkspaceGitDiffs } from '../agent/slashCommands.js';
-import type { WorkspaceFileResponse, WorkspaceTreeResponse } from '../types/contract.js';
+import type { WorkspaceFileResponse, WorkspaceTreeResponse, WorkspaceDirectoriesResponse } from '../types/contract.js';
 
 export const workspaceRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /api/workspace/directories
   fastify.get<{
     Querystring: { path?: string };
   }>('/api/workspace/directories', async (req, reply) => {
-    const basePath = req.query.path || '/home/adam';
+    const requestedPath = req.query.path || '/home/adam';
+    const basePath = fs.existsSync(requestedPath) ? requestedPath : getDefaultWorkspaceRoot();
     const dirs = await listWorkspaceDirectories(basePath);
-    return reply.status(200).send({
+    const parent = basePath !== '/' ? path.dirname(basePath) : null;
+    const response: WorkspaceDirectoriesResponse = {
       base: basePath,
+      parent,
       directories: dirs,
       common: [
         { name: 'Katalog domowy (~/)', path: '/home/adam' },
@@ -30,7 +33,8 @@ export const workspaceRoutes: FastifyPluginAsync = async (fastify) => {
         { name: 'minesweeper-repo', path: '/home/adam/projects/minesweeper-repo' },
         { name: 'projects', path: '/home/adam/projects' },
       ],
-    });
+    };
+    return reply.status(200).send(response);
   });
   // GET /api/workspace/tree
   fastify.get<{

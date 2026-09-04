@@ -158,6 +158,20 @@ export interface WorkspaceTreeNode {
   children?: WorkspaceTreeNode[];
 }
 
+export interface WorkspaceDirectoryItem {
+  name: string;
+  path: string;
+  hasChildren?: boolean;
+  isGit?: boolean;
+}
+
+export interface WorkspaceDirectoriesResponse {
+  base: string;
+  parent?: string | null;
+  directories: WorkspaceDirectoryItem[];
+  common: { name: string; path: string }[];
+}
+
 export interface WorkspaceTreeResponse {
   root: string;
   tree: WorkspaceTreeNode[];

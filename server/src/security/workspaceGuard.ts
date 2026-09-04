@@ -1,6 +1,6 @@
 import path from 'node:path';
 import fs from 'node:fs';
-import type { WorkspaceTreeNode, WorkspaceFileResponse, FileCategory } from '../types/contract.js';
+import type { WorkspaceTreeNode, WorkspaceFileResponse, FileCategory, WorkspaceDirectoryItem } from '../types/contract.js';
 
 export class WorkspaceSecurityError extends Error {
   statusCode: number;
@@ -33,20 +33,54 @@ export function getDefaultWorkspaceRoot(): string {
 
 export async function listWorkspaceDirectories(
   basePath = '/home/adam'
-): Promise<{ path: string; name: string }[]> {
+): Promise<WorkspaceDirectoryItem[]> {
   const targetDir = fs.existsSync(basePath) ? basePath : getDefaultWorkspaceRoot();
   try {
     const entries = await fs.promises.readdir(targetDir, { withFileTypes: true });
-    const dirs: { path: string; name: string }[] = [];
+    const dirs: WorkspaceDirectoryItem[] = [];
     for (const entry of entries) {
+      let isDir = entry.isDirectory();
+      if (entry.isSymbolicLink()) {
+        try {
+          const stat = await fs.promises.stat(path.join(targetDir, entry.name));
+          isDir = stat.isDirectory();
+        } catch {
+          continue;
+        }
+      }
+
       if (
-        entry.isDirectory() &&
+        isDir &&
         !entry.name.startsWith('.') &&
         !IGNORED_DIRECTORIES.has(entry.name)
       ) {
+        const full = path.join(targetDir, entry.name);
+        let hasChildren = false;
+        let isGit = false;
+        try {
+          isGit = fs.existsSync(path.join(full, '.git'));
+        } catch {}
+        try {
+          const subEntries = await fs.promises.readdir(full, { withFileTypes: true });
+          hasChildren = subEntries.some((s) => {
+            if (s.name.startsWith('.') || IGNORED_DIRECTORIES.has(s.name)) return false;
+            if (s.isDirectory()) return true;
+            if (s.isSymbolicLink()) {
+              try {
+                return fs.statSync(path.join(full, s.name)).isDirectory();
+              } catch {
+                return false;
+              }
+            }
+            return false;
+          });
+        } catch {}
+
         dirs.push({
           name: entry.name,
-          path: path.join(targetDir, entry.name),
+          path: full,
+          hasChildren,
+          isGit,
         });
       }
     }
