@@ -2,15 +2,20 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   Brain,
   Check,
+  CheckCircle2,
   ChevronDown,
   ChevronRight,
+  FileSearch,
   Folder,
   FolderGit2,
   FolderOpen,
   FolderTree,
   Home,
+  ListTodo,
+  Sliders,
   Sparkles,
   Tag,
+  Wrench,
   X,
   Zap,
 } from 'lucide-react';
@@ -32,6 +37,13 @@ interface NewSessionModalProps {
   onSubmit: (params: NewSessionSubmitParams) => void;
   defaultWorkspacePath?: string;
 }
+
+const STARTER_TEMPLATES = [
+  { label: 'Opracuj plan', prefix: '/plan ', icon: ListTodo, color: 'text-primary' },
+  { label: 'Przegląd zmian', prefix: '/review', icon: FileSearch, color: 'text-sky-500' },
+  { label: 'Napraw błąd', prefix: 'Przeanalizuj problem i przygotuj poprawkę: ', icon: Wrench, color: 'text-amber-500' },
+  { label: 'Napisz testy', prefix: 'Napisz kompleksowe testy dla: ', icon: CheckCircle2, color: 'text-emerald-500' },
+];
 
 const COMMON_DIRECTORIES = [
   { label: 'my-domain', path: '/home/adam/projects/my-domain', icon: FolderGit2 },
@@ -71,14 +83,14 @@ export const NewSessionModal: React.FC<NewSessionModalProps> = ({
 }) => {
   const [prompt, setPrompt] = useState('');
   const [title, setTitle] = useState('');
-  const [showCustomTitle, setShowCustomTitle] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [workspacePath, setWorkspacePath] = useState(defaultWorkspacePath);
   const [selectedModel, setSelectedModel] = useState('gemini-3.8-flash');
   const [effort, setEffort] = useState<ReasoningEffort>('medium');
   const [availableDirs, setAvailableDirs] = useState<{ name: string; path: string }[]>([]);
 
   // Popover menus state
-  const [openMenu, setOpenMenu] = useState<'workspace' | 'model' | 'effort' | null>(null);
+  const [openMenu, setOpenMenu] = useState<'workspace' | 'model' | null>(null);
   const [isTreeModalOpen, setIsTreeModalOpen] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -90,7 +102,7 @@ export const NewSessionModal: React.FC<NewSessionModalProps> = ({
     if (isOpen) {
       setPrompt('');
       setTitle('');
-      setShowCustomTitle(false);
+      setShowAdvanced(false);
       setOpenMenu(null);
       setIsTreeModalOpen(false);
       setWorkspacePath(defaultWorkspacePath || '/home/adam/projects/my-domain');
@@ -222,6 +234,30 @@ export const NewSessionModal: React.FC<NewSessionModalProps> = ({
 
         {/* Body */}
         <div className="p-4 sm:p-5 space-y-3">
+          {/* Quick Starter Chips */}
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5 select-none">
+            <span className="text-[10px] font-semibold text-muted uppercase tracking-wider shrink-0 mr-0.5">
+              Szablony:
+            </span>
+            {STARTER_TEMPLATES.map((tpl) => {
+              const Icon = tpl.icon;
+              return (
+                <button
+                  key={tpl.label}
+                  type="button"
+                  onClick={() => {
+                    setPrompt(tpl.prefix);
+                    textareaRef.current?.focus();
+                  }}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-card border border-border/80 text-main hover:border-primary/50 hover:bg-surface-hover hover:text-primary transition-all shrink-0 cursor-pointer shadow-2xs"
+                >
+                  <Icon className={`w-3 h-3 ${tpl.color}`} />
+                  <span>{tpl.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
           {/* Main Prompt Input Field */}
           <div className="relative">
             <textarea
@@ -229,15 +265,15 @@ export const NewSessionModal: React.FC<NewSessionModalProps> = ({
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               onKeyDown={handleTextareaKeyDown}
-              placeholder="Co chcesz dzisiaj zrobić? Opisz zadanie lub polecenie dla agenta..."
+              placeholder="Co chcesz dzisiaj zrobić? Opisz zadanie, wklej fragment kodu lub użyj /plan..."
               rows={4}
-              className="w-full p-3.5 text-xs sm:text-sm rounded-xl bg-card border border-border text-main placeholder:text-subtle focus:outline-hidden focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all resize-y min-h-[105px] max-h-[220px] leading-relaxed"
+              className="w-full p-3.5 text-xs sm:text-sm rounded-xl bg-card border border-border text-main placeholder:text-subtle focus:outline-hidden focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all resize-y min-h-[110px] max-h-[220px] leading-relaxed"
             />
           </div>
 
           {/* Context Control Bar */}
           <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-            {/* Left pills: Workspace, Model, Effort */}
+            {/* Left: Workspace & Model */}
             <div className="flex flex-wrap items-center gap-1.5" data-popover-root>
               {/* Workspace Pill & Popover */}
               <div className="relative">
@@ -361,7 +397,7 @@ export const NewSessionModal: React.FC<NewSessionModalProps> = ({
                 </button>
 
                 {openMenu === 'model' && (
-                  <div className="absolute left-0 top-full mt-1.5 w-[260px] sm:w-[290px] bg-card border border-border rounded-xl shadow-xl z-50 p-2 space-y-1 animate-in fade-in zoom-in-95 duration-100">
+                  <div className="absolute left-0 top-full mt-1.5 w-[260px] sm:w-[290px] bg-card border border-border rounded-xl shadow-xl z-50 p-2 space-y-1 max-h-[260px] overflow-y-auto animate-in fade-in zoom-in-95 duration-100">
                     <div className="px-2 py-1 text-[11px] font-semibold text-main">Wybierz model AI</div>
                     {AVAILABLE_MODELS.map((m) => {
                       const isSelected = selectedModel === m.id;
@@ -390,82 +426,77 @@ export const NewSessionModal: React.FC<NewSessionModalProps> = ({
                   </div>
                 )}
               </div>
+            </div>
 
-              {/* Effort Pill & Popover (Only if supported) */}
-              {currentModelDef.supportsEffort && (
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setOpenMenu(openMenu === 'effort' ? null : 'effort')}
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
-                      openMenu === 'effort'
-                        ? 'bg-primary/15 border-primary/40 text-primary'
-                        : 'bg-card border-border text-muted hover:text-main hover:bg-surface-hover'
-                    }`}
-                  >
-                    <Brain className="w-3.5 h-3.5 text-primary shrink-0" />
-                    <span>{effort === 'low' ? 'Szybki' : effort === 'medium' ? 'Średni' : 'Głęboki'}</span>
-                    <ChevronDown className="w-3 h-3 text-subtle" />
-                  </button>
+            {/* Right side: Advanced Options toggle */}
+            <div>
+              <button
+                type="button"
+                onClick={() => setShowAdvanced(!showAdvanced)}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
+                  showAdvanced
+                    ? 'text-primary bg-primary/10 border-primary/30'
+                    : 'text-muted border-border bg-card hover:text-main hover:bg-surface-hover'
+                }`}
+                title="Więcej opcji (poziom myślenia, własna nazwa)"
+              >
+                <Sliders className="w-3.5 h-3.5 text-primary" />
+                <span>Opcje</span>
+                <ChevronDown className={`w-3 h-3 text-subtle transition-transform duration-150 ${showAdvanced ? 'rotate-180' : ''}`} />
+              </button>
+            </div>
+          </div>
 
-                  {openMenu === 'effort' && (
-                    <div className="absolute left-0 top-full mt-1.5 w-[220px] bg-card border border-border rounded-xl shadow-xl z-50 p-2 space-y-1 animate-in fade-in zoom-in-95 duration-100">
-                      <div className="px-2 py-1 text-[11px] font-semibold text-main">Poziom myślenia</div>
+          {/* Expandable Advanced Options Panel */}
+          {showAdvanced && (
+            <div className="p-3 rounded-xl bg-card border border-border/80 space-y-2.5 animate-in fade-in duration-150">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                {/* Reasoning Effort segmented control */}
+                {currentModelDef.supportsEffort ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-medium text-muted flex items-center gap-1">
+                      <Brain className="w-3 h-3 text-primary" />
+                      Namysł:
+                    </span>
+                    <div className="inline-flex rounded-lg border border-border bg-surface p-0.5">
                       {EFFORT_OPTIONS.map((opt) => {
                         const isSelected = effort === opt.id;
                         return (
                           <button
                             key={opt.id}
                             type="button"
-                            onClick={() => {
-                              setEffort(opt.id);
-                              setOpenMenu(null);
-                            }}
-                            className={`flex items-center justify-between w-full px-2.5 py-1.5 rounded-lg text-left transition-colors cursor-pointer ${
+                            onClick={() => setEffort(opt.id)}
+                            className={`px-2 py-0.5 rounded-md text-[11px] font-medium transition-colors cursor-pointer ${
                               isSelected
-                                ? 'bg-primary/15 text-primary font-semibold'
-                                : 'hover:bg-surface-hover text-muted hover:text-main'
+                                ? 'bg-primary text-white font-semibold shadow-xs'
+                                : 'text-muted hover:text-main'
                             }`}
+                            title={opt.desc}
                           >
-                            <span className="text-xs">{opt.label}</span>
-                            {isSelected && <Check className="w-3.5 h-3.5 text-primary shrink-0 ml-2" />}
+                            {opt.label.split(' ')[0]}
                           </button>
                         );
                       })}
                     </div>
-                  )}
+                  </div>
+                ) : (
+                  <div className="text-[11px] text-muted">
+                    Model używa wbudowanego poziomu myślenia
+                  </div>
+                )}
+
+                {/* Optional Custom Title input */}
+                <div className="flex items-center gap-1.5 flex-1 sm:max-w-xs sm:ml-auto">
+                  <Tag className="w-3 h-3 text-muted shrink-0" />
+                  <input
+                    type="text"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="Własna nazwa zadania (opcjonalna)..."
+                    className="w-full px-2.5 py-1 text-xs rounded-lg bg-surface border border-border text-main placeholder:text-muted/60 focus:outline-hidden focus:border-primary"
+                  />
                 </div>
-              )}
-            </div>
-
-            {/* Right side: Optional title toggle */}
-            <div>
-              <button
-                type="button"
-                onClick={() => setShowCustomTitle(!showCustomTitle)}
-                className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer ${
-                  showCustomTitle || title.trim()
-                    ? 'text-primary bg-primary/10'
-                    : 'text-muted hover:text-main hover:bg-surface-hover'
-                }`}
-                title="Nadaj własną nazwę zadania"
-              >
-                <Tag className="w-3 h-3" />
-                <span>{showCustomTitle ? 'Ukryj nazwę' : title.trim() ? title : 'Własna nazwa'}</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Expandable Custom Title Input */}
-          {showCustomTitle && (
-            <div className="pt-1 animate-in fade-in duration-100">
-              <input
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Własna nazwa zadania (opcjonalna)..."
-                className="w-full px-3 py-1.5 text-xs rounded-lg bg-card border border-border text-main placeholder:text-subtle focus:outline-hidden focus:border-primary"
-              />
+              </div>
             </div>
           )}
         </div>
