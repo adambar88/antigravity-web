@@ -672,8 +672,8 @@ export const FileTreeViewer: React.FC<FileTreeViewerProps> = ({
                 </div>
               </div>
 
-              {/* Breadcrumb sub-header */}
-              <div className="px-3 py-1 bg-surface/20 border-b border-border/60 text-[11px] font-mono text-subtle truncate select-all">
+              {/* Breadcrumb sub-header with full path */}
+              <div className="px-3 py-1.5 bg-surface/20 border-b border-border/60 text-[11px] font-mono text-subtle break-all select-all leading-relaxed">
                 {selectedFilePath}
               </div>
 

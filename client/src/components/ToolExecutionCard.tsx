@@ -295,13 +295,13 @@ export const ToolExecutionCard: React.FC<ToolExecutionCardProps> = React.memo(({
                       e.stopPropagation();
                       onViewDiff?.(d.file_path);
                     }}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-surface border border-border text-[11px] text-primary hover:border-primary transition-colors cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-surface border border-border text-[11px] text-primary hover:border-primary transition-colors cursor-pointer max-w-full text-left"
                   >
-                    <FileCode className="w-3.5 h-3.5" />
-                    <span className="font-mono">{formatFriendlyPath(d.file_path)}</span>
-                    <span className="text-emerald-600 font-mono font-medium">+{d.additions}</span>
-                    <span className="text-rose-600 font-mono font-medium">-{d.deletions}</span>
-                    <ExternalLink className="w-2.5 h-2.5 ml-0.5 opacity-60" />
+                    <FileCode className="w-3.5 h-3.5 shrink-0" />
+                    <span className="font-mono break-all">{d.file_path}</span>
+                    <span className="text-emerald-600 font-mono font-medium shrink-0">+{d.additions}</span>
+                    <span className="text-rose-600 font-mono font-medium shrink-0">-{d.deletions}</span>
+                    <ExternalLink className="w-2.5 h-2.5 ml-0.5 opacity-60 shrink-0" />
                   </button>
                 ))}
               </div>

@@ -309,6 +309,9 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
   const [showEffortMenu, setShowEffortMenu] = useState(false);
   const [showModelMenu, setShowModelMenu] = useState(false);
 
+  const slashMenuRef = useRef<HTMLDivElement | null>(null);
+  const slashItemsRef = useRef<(HTMLButtonElement | null)[]>([]);
+
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const dragCounterRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -490,6 +493,31 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
     return cmd.command.toLowerCase().startsWith(searchWord);
   });
 
+  // Ensure selected index stays within bounds
+  useEffect(() => {
+    if (selectedSlashIndex >= filteredSlashCommands.length && filteredSlashCommands.length > 0) {
+      setSelectedSlashIndex(0);
+    }
+  }, [filteredSlashCommands.length, selectedSlashIndex]);
+
+  // Keep selected slash command visible inside the scrollable container
+  useEffect(() => {
+    if (!showSlashMenu) return;
+
+    if (selectedSlashIndex === 0 && slashMenuRef.current) {
+      slashMenuRef.current.scrollTop = 0;
+      return;
+    }
+
+    const selectedItem = slashItemsRef.current[selectedSlashIndex];
+    if (selectedItem) {
+      selectedItem.scrollIntoView({
+        block: 'nearest',
+        inline: 'nearest',
+      });
+    }
+  }, [selectedSlashIndex, showSlashMenu]);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     setText(val);
@@ -542,6 +570,16 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
       if (e.key === 'ArrowUp') {
         e.preventDefault();
         setSelectedSlashIndex((prev) => (prev - 1 + filteredSlashCommands.length) % filteredSlashCommands.length);
+        return;
+      }
+      if (e.key === 'Home') {
+        e.preventDefault();
+        setSelectedSlashIndex(0);
+        return;
+      }
+      if (e.key === 'End') {
+        e.preventDefault();
+        setSelectedSlashIndex(filteredSlashCommands.length - 1);
         return;
       }
       if (e.key === 'Enter' || e.key === 'Tab') {
@@ -628,14 +666,24 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
           <div className="p-2 border-b border-border text-[11px] font-medium text-muted uppercase tracking-wider">
             Polecenia slash ({filteredSlashCommands.length})
           </div>
-          <div className="p-1 space-y-0.5 max-h-60 overflow-y-auto">
+          <div
+            ref={slashMenuRef}
+            role="listbox"
+            aria-label="Polecenia slash"
+            className="p-1 space-y-0.5 max-h-60 overflow-y-auto scrollbar-thin"
+          >
             {filteredSlashCommands.map((cmd, idx) => {
               const Icon = cmd.icon;
               const isSelected = idx === selectedSlashIndex;
               return (
                 <button
                   key={cmd.command}
+                  ref={(el) => {
+                    slashItemsRef.current[idx] = el;
+                  }}
                   type="button"
+                  role="option"
+                  aria-selected={isSelected}
                   onClick={() => handleSelectSlashCommand(cmd)}
                   className={`w-full flex items-start gap-2.5 p-2 rounded-xl text-left transition-colors cursor-pointer ${
                     isSelected ? 'bg-primary/10 text-primary' : 'text-main hover:bg-surface-hover'

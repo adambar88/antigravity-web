@@ -65,10 +65,19 @@ export const DiffViewer: React.FC<DiffViewerProps> = React.memo(({ diff }) => {
     return computeFileDiff(diff.before_content || '', diff.after_content || '');
   }, [diff.before_content, diff.after_content]);
 
+  const [copiedPath, setCopiedPath] = useState(false);
+
   const handleCopy = () => {
     navigator.clipboard.writeText(diff.after_content || diff.before_content || '');
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleCopyPath = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(diff.file_path);
+    setCopiedPath(true);
+    setTimeout(() => setCopiedPath(false), 2000);
   };
 
   const additions = diff.additions || computed.additions;
@@ -77,30 +86,55 @@ export const DiffViewer: React.FC<DiffViewerProps> = React.memo(({ diff }) => {
   return (
     <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-xs">
       {/* Header bar */}
-      <div className="flex items-center justify-between px-4 py-3 bg-surface border-b border-border">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <FileCode className="w-4 h-4 text-primary shrink-0" />
-          <span className="font-mono text-xs font-semibold text-main truncate">
-            {diff.file_path}
-          </span>
-          <div className="flex items-center gap-1.5 shrink-0 text-xs font-mono font-medium">
-            <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
-              +{additions}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-3.5 sm:px-4 py-2.5 sm:py-3 bg-surface border-b border-border">
+        {/* Left: Full Path and Additions/Deletions */}
+        <div className="flex items-start sm:items-center gap-2 min-w-0 flex-1">
+          <FileCode className="w-4 h-4 text-primary shrink-0 mt-0.5 sm:mt-0" />
+          <div className="min-w-0 flex-1 flex flex-wrap items-center gap-1.5">
+            <span
+              className="font-mono text-xs font-semibold text-main break-all select-all leading-relaxed"
+              title={diff.file_path}
+            >
+              {diff.file_path}
             </span>
-            <span className="px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-600 border border-rose-500/20">
-              -{deletions}
-            </span>
+            <button
+              type="button"
+              onClick={handleCopyPath}
+              title="Kopiuj pełną ścieżkę pliku"
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-muted hover:text-main hover:bg-card border border-border/60 transition-colors shrink-0 cursor-pointer"
+            >
+              {copiedPath ? (
+                <>
+                  <Check className="w-2.5 h-2.5 text-emerald-500" />
+                  <span className="text-emerald-500 font-medium">Skopiowano</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-2.5 h-2.5" />
+                  <span>Ścieżka</span>
+                </>
+              )}
+            </button>
+            <div className="flex items-center gap-1.5 shrink-0 text-xs font-mono font-medium ml-0.5">
+              <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                +{additions}
+              </span>
+              <span className="px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-600 border border-rose-500/20">
+                -{deletions}
+              </span>
+            </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        {/* Right: Controls toolbar */}
+        <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-border/30">
           {/* View mode toggle */}
           <div className="inline-flex rounded-lg border border-border bg-card p-0.5">
             <button
               type="button"
               onClick={() => setViewMode('inline')}
               title="Widok ciągły (inline)"
-              className={`p-1.5 rounded-md text-xs font-medium transition-colors ${
+              className={`p-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer ${
                 viewMode === 'inline'
                   ? 'bg-primary/10 text-primary font-semibold'
                   : 'text-muted hover:text-main'
@@ -112,7 +146,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = React.memo(({ diff }) => {
               type="button"
               onClick={() => setViewMode('split')}
               title="Widok obok siebie (side-by-side)"
-              className={`p-1.5 rounded-md text-xs font-medium transition-colors ${
+              className={`p-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer ${
                 viewMode === 'split'
                   ? 'bg-primary/10 text-primary font-semibold'
                   : 'text-muted hover:text-main'
@@ -125,7 +159,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = React.memo(({ diff }) => {
           <button
             type="button"
             onClick={handleCopy}
-            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-border bg-card text-xs font-medium text-muted hover:text-main hover:bg-surface-hover transition-colors"
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-border bg-card text-xs font-medium text-muted hover:text-main hover:bg-surface-hover transition-colors cursor-pointer"
           >
             {copied ? (
               <>

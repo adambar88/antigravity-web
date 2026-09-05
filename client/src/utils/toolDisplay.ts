@@ -18,13 +18,7 @@ export interface ToolDisplayInfo {
  */
 export function formatFriendlyPath(rawPath?: string | null): string {
   if (!rawPath || typeof rawPath !== 'string') return '';
-  let p = rawPath.trim();
-  if (p.startsWith('/home/adam/projects/')) {
-    p = p.replace('/home/adam/projects/', '');
-  } else if (p.startsWith('/home/adam/')) {
-    p = p.replace('/home/adam/', '~/');
-  }
-  return p;
+  return rawPath.trim();
 }
 
 export function getToolDisplayInfo(toolName: string, args: Record<string, unknown> = {}): ToolDisplayInfo {
