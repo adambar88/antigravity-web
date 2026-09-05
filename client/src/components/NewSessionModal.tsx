@@ -3,6 +3,7 @@ import {
   Brain,
   Check,
   ChevronDown,
+  ChevronRight,
   Folder,
   FolderGit2,
   FolderOpen,
@@ -15,7 +16,7 @@ import {
 } from 'lucide-react';
 import { ReasoningEffort } from '@/types';
 import { api } from '@/services/api';
-import { FolderTreePicker } from './FolderTreePicker';
+import { ChangeWorkspaceModal } from './ChangeWorkspaceModal';
 
 export interface NewSessionSubmitParams {
   title: string;
@@ -78,7 +79,7 @@ export const NewSessionModal: React.FC<NewSessionModalProps> = ({
 
   // Popover menus state
   const [openMenu, setOpenMenu] = useState<'workspace' | 'model' | 'effort' | null>(null);
-  const [showFolderTree, setShowFolderTree] = useState(false);
+  const [isTreeModalOpen, setIsTreeModalOpen] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -91,7 +92,7 @@ export const NewSessionModal: React.FC<NewSessionModalProps> = ({
       setTitle('');
       setShowCustomTitle(false);
       setOpenMenu(null);
-      setShowFolderTree(false);
+      setIsTreeModalOpen(false);
       setWorkspacePath(defaultWorkspacePath || '/home/adam/projects/my-domain');
 
       api.getWorkspaceDirectories('/home/adam').then((res) => {
@@ -256,7 +257,7 @@ export const NewSessionModal: React.FC<NewSessionModalProps> = ({
                 </button>
 
                 {openMenu === 'workspace' && (
-                  <div className="absolute left-0 top-full mt-1.5 w-[310px] sm:w-[350px] bg-card border border-border rounded-xl shadow-xl z-50 p-3 animate-in fade-in zoom-in-95 duration-100">
+                  <div className="absolute left-0 top-full mt-1.5 w-[310px] sm:w-[350px] bg-card border border-border rounded-xl shadow-xl z-50 p-3 max-h-[calc(100vh-180px)] overflow-y-auto animate-in fade-in zoom-in-95 duration-100">
                     <div className="text-[11px] font-semibold text-main mb-2">Wybierz katalog roboczy</div>
                     
                     {/* Path input */}
@@ -322,28 +323,22 @@ export const NewSessionModal: React.FC<NewSessionModalProps> = ({
                       })}
                     </div>
 
-                    {/* Tree Picker Toggle */}
+                    {/* Dedicated Full Tree Modal Launcher */}
                     <div className="pt-2 border-t border-border">
                       <button
                         type="button"
-                        onClick={() => setShowFolderTree(!showFolderTree)}
-                        className="flex items-center justify-between w-full text-[11px] font-medium text-primary hover:underline cursor-pointer"
+                        onClick={() => {
+                          setOpenMenu(null);
+                          setIsTreeModalOpen(true);
+                        }}
+                        className="flex items-center justify-between w-full px-2.5 py-2 rounded-xl bg-surface border border-border hover:border-primary/40 hover:bg-surface-hover text-xs font-medium text-main transition-colors cursor-pointer group"
                       >
-                        <span className="flex items-center gap-1">
-                          <FolderTree className="w-3.5 h-3.5" />
-                          Przeglądaj drzewo folderów
+                        <span className="flex items-center gap-2 text-primary font-medium">
+                          <FolderTree className="w-4 h-4" />
+                          <span>Przeglądaj drzewo folderów...</span>
                         </span>
-                        <span className="text-[10px] text-muted">{showFolderTree ? 'Zwiń' : 'Rozwiń'}</span>
+                        <ChevronRight className="w-3.5 h-3.5 text-muted group-hover:text-main group-hover:translate-x-0.5 transition-all" />
                       </button>
-                      {showFolderTree && (
-                        <div className="mt-2">
-                          <FolderTreePicker
-                            selectedPath={workspacePath}
-                            onSelectPath={(p) => setWorkspacePath(p)}
-                            maxHeight="max-h-[160px]"
-                          />
-                        </div>
-                      )}
                     </div>
                   </div>
                 )}
@@ -500,6 +495,23 @@ export const NewSessionModal: React.FC<NewSessionModalProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Workspace Directory Tree Modal (Layered on top of NewSessionModal) */}
+      {isTreeModalOpen && (
+        <ChangeWorkspaceModal
+          isOpen={isTreeModalOpen}
+          onClose={() => setIsTreeModalOpen(false)}
+          currentWorkspacePath={workspacePath}
+          onSave={(newPath) => {
+            setWorkspacePath(newPath);
+            setIsTreeModalOpen(false);
+          }}
+          title="Wybierz katalog roboczy"
+          description="Przeglądaj strukturę folderów na serwerze i wybierz lokalizację zadania"
+          saveButtonText="Wybierz ten katalog"
+          zIndexClass="z-[60]"
+        />
+      )}
     </div>
   );
 };

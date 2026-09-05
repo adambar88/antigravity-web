@@ -15,6 +15,10 @@ interface ChangeWorkspaceModalProps {
   onClose: () => void;
   currentWorkspacePath: string;
   onSave: (newPath: string) => void;
+  title?: string;
+  description?: string;
+  saveButtonText?: string;
+  zIndexClass?: string;
 }
 
 const COMMON_DIRECTORIES = [
@@ -30,6 +34,10 @@ export const ChangeWorkspaceModal: React.FC<ChangeWorkspaceModalProps> = ({
   onClose,
   currentWorkspacePath,
   onSave,
+  title = 'Zmień katalog roboczy',
+  description = 'Wybierz lokalizację z drzewa folderów lub wpisz ścieżkę',
+  saveButtonText = 'Zapisz zmiany',
+  zIndexClass = 'z-50',
 }) => {
   const [pathValue, setPathValue] = useState(currentWorkspacePath);
   const [availableDirs, setAvailableDirs] = useState<{ name: string; path: string }[]>([]);
@@ -56,7 +64,7 @@ export const ChangeWorkspaceModal: React.FC<ChangeWorkspaceModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
+    <div className={`fixed inset-0 ${zIndexClass} flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in`}>
       <div
         className="w-full max-w-2xl bg-surface border border-border rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
@@ -68,8 +76,8 @@ export const ChangeWorkspaceModal: React.FC<ChangeWorkspaceModalProps> = ({
               <FolderOpen className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-sm font-semibold text-main">Zmień katalog roboczy</h2>
-              <p className="text-[11px] text-muted">Wybierz lokalizację z drzewa folderów lub wpisz ścieżkę</p>
+              <h2 className="text-sm font-semibold text-main">{title}</h2>
+              <p className="text-[11px] text-muted">{description}</p>
             </div>
           </div>
           <button
@@ -181,7 +189,7 @@ export const ChangeWorkspaceModal: React.FC<ChangeWorkspaceModalProps> = ({
                 className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-xl bg-primary text-white hover:bg-primary-hover disabled:opacity-40 disabled:pointer-events-none shadow-sm transition-colors cursor-pointer"
               >
                 <Check className="w-3.5 h-3.5" />
-                <span>Zapisz zmiany</span>
+                <span>{saveButtonText}</span>
               </button>
             </div>
           </div>
