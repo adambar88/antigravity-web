@@ -1,21 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  Brain,
   Check,
-  CheckCircle2,
   ChevronDown,
   ChevronRight,
-  FileSearch,
   Folder,
   FolderGit2,
   FolderOpen,
   FolderTree,
   Home,
-  ListTodo,
-  Sliders,
   Sparkles,
-  Tag,
-  Wrench,
   X,
   Zap,
 } from 'lucide-react';
@@ -38,13 +31,6 @@ interface NewSessionModalProps {
   defaultWorkspacePath?: string;
 }
 
-const STARTER_TEMPLATES = [
-  { label: 'Opracuj plan', prefix: '/plan ', icon: ListTodo, color: 'text-primary' },
-  { label: 'Przegląd zmian', prefix: '/review', icon: FileSearch, color: 'text-sky-500' },
-  { label: 'Napraw błąd', prefix: 'Przeanalizuj problem i przygotuj poprawkę: ', icon: Wrench, color: 'text-amber-500' },
-  { label: 'Napisz testy', prefix: 'Napisz kompleksowe testy dla: ', icon: CheckCircle2, color: 'text-emerald-500' },
-];
-
 const COMMON_DIRECTORIES = [
   { label: 'my-domain', path: '/home/adam/projects/my-domain', icon: FolderGit2 },
   { label: 'Katalog domowy (~/)', path: '/home/adam', icon: Home },
@@ -56,23 +42,15 @@ interface ModelDefinition {
   id: string;
   name: string;
   badge: string;
-  desc: string;
-  supportsEffort: boolean;
 }
 
 const AVAILABLE_MODELS: ModelDefinition[] = [
-  { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash', badge: 'Najszybszy', desc: 'Wszechstronny, błyskawiczna responsywność', supportsEffort: true },
-  { id: 'gemini-3.7-flash', name: 'Gemini 3.7 Flash', badge: 'Responsywny', desc: 'Standardowy model Flash z myśleniem', supportsEffort: true },
-  { id: 'gemini-3.1-pro', name: 'Gemini 3.1 Pro', badge: 'Pro / Kod', desc: 'Głębokie wnioskowanie i architektura', supportsEffort: true },
-  { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', badge: 'Thinking', desc: 'Thinking model od Anthropic', supportsEffort: false },
-  { id: 'claude-opus-4-6-thinking', name: 'Claude Opus 4.6', badge: 'Reasoning', desc: 'Zaawansowane myślenie Claude Opus', supportsEffort: false },
-  { id: 'gpt-oss-120b-medium', name: 'GPT-OSS 120B', badge: 'Open Source', desc: 'Model open-source 120B', supportsEffort: false },
-];
-
-const EFFORT_OPTIONS: { id: ReasoningEffort; label: string; desc: string }[] = [
-  { id: 'low', label: 'Szybki (Low)', desc: 'Ekspresowe odpowiedzi i minimalna latencja' },
-  { id: 'medium', label: 'Średni (Medium)', desc: 'Zbalansowana analiza i kodowanie' },
-  { id: 'high', label: 'Głęboki (High)', desc: 'Maksymalna analiza pre-mortem i debugowanie' },
+  { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash', badge: 'Najszybszy' },
+  { id: 'gemini-3.1-pro', name: 'Gemini 3.1 Pro', badge: 'Pro / Kod' },
+  { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', badge: 'Thinking' },
+  { id: 'claude-opus-4-6-thinking', name: 'Claude Opus 4.6', badge: 'Reasoning' },
+  { id: 'gpt-oss-120b-medium', name: 'GPT-OSS 120B', badge: 'Open Source' },
+  { id: 'gemini-3.7-flash', name: 'Gemini 3.7 Flash', badge: 'Flash 3.7' },
 ];
 
 export const NewSessionModal: React.FC<NewSessionModalProps> = ({
@@ -82,11 +60,8 @@ export const NewSessionModal: React.FC<NewSessionModalProps> = ({
   defaultWorkspacePath = '/home/adam/projects/my-domain',
 }) => {
   const [prompt, setPrompt] = useState('');
-  const [title, setTitle] = useState('');
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [workspacePath, setWorkspacePath] = useState(defaultWorkspacePath);
   const [selectedModel, setSelectedModel] = useState('gemini-3.8-flash');
-  const [effort, setEffort] = useState<ReasoningEffort>('medium');
   const [availableDirs, setAvailableDirs] = useState<{ name: string; path: string }[]>([]);
 
   // Popover menus state
@@ -101,8 +76,6 @@ export const NewSessionModal: React.FC<NewSessionModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       setPrompt('');
-      setTitle('');
-      setShowAdvanced(false);
       setOpenMenu(null);
       setIsTreeModalOpen(false);
       setWorkspacePath(defaultWorkspacePath || '/home/adam/projects/my-domain');
@@ -165,26 +138,25 @@ export const NewSessionModal: React.FC<NewSessionModalProps> = ({
   const handleSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
 
+    const effort: ReasoningEffort = 'medium';
+
     let modelIdToSubmit = selectedModel;
     if (selectedModel.startsWith('gemini-3.8-flash')) {
       modelIdToSubmit = `gemini-3.8-flash-${effort}`;
     } else if (selectedModel.startsWith('gemini-3.7-flash')) {
       modelIdToSubmit = `gemini-3.7-flash-${effort}`;
     } else if (selectedModel.startsWith('gemini-3.1-pro')) {
-      modelIdToSubmit = effort === 'medium' ? 'gemini-3.1-pro-high' : `gemini-3.1-pro-${effort}`;
+      modelIdToSubmit = 'gemini-3.1-pro-high';
     }
 
     const trimmedPrompt = prompt.trim();
     const cleanOneLinePrompt = trimmedPrompt.replace(/\s+/g, ' ');
 
-    // Automatic title generation if not explicitly provided
-    let finalTitle = title.trim();
-    if (!finalTitle) {
-      if (cleanOneLinePrompt) {
-        finalTitle = cleanOneLinePrompt.slice(0, 48) + (cleanOneLinePrompt.length > 48 ? '…' : '');
-      } else {
-        finalTitle = `Zadanie: ${getWorkspaceDisplayName(workspacePath)}`;
-      }
+    let finalTitle = '';
+    if (cleanOneLinePrompt) {
+      finalTitle = cleanOneLinePrompt.slice(0, 48) + (cleanOneLinePrompt.length > 48 ? '…' : '');
+    } else {
+      finalTitle = `Zadanie: ${getWorkspaceDisplayName(workspacePath)}`;
     }
 
     onSubmit({
@@ -205,22 +177,17 @@ export const NewSessionModal: React.FC<NewSessionModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-100">
       <div
         ref={containerRef}
         className="w-full max-w-xl bg-surface border border-border rounded-2xl shadow-2xl flex flex-col overflow-visible"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-border bg-card rounded-t-2xl">
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-              <Sparkles className="w-3.5 h-3.5" />
-            </div>
-            <div>
-              <h2 className="text-sm font-semibold text-main leading-tight">Nowe zadanie</h2>
-              <p className="text-[11px] text-muted">Szybki start z agentem Antigravity</p>
-            </div>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-card/60 rounded-t-2xl">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-primary" />
+            <h2 className="text-xs font-semibold text-main">Nowe zadanie</h2>
           </div>
           <button
             type="button"
@@ -232,296 +199,187 @@ export const NewSessionModal: React.FC<NewSessionModalProps> = ({
           </button>
         </div>
 
-        {/* Body */}
-        <div className="p-4 sm:p-5 space-y-3">
-          {/* Quick Starter Chips */}
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5 select-none">
-            <span className="text-[10px] font-semibold text-muted uppercase tracking-wider shrink-0 mr-0.5">
-              Szablony:
-            </span>
-            {STARTER_TEMPLATES.map((tpl) => {
-              const Icon = tpl.icon;
-              return (
-                <button
-                  key={tpl.label}
-                  type="button"
-                  onClick={() => {
-                    setPrompt(tpl.prefix);
-                    textareaRef.current?.focus();
-                  }}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-card border border-border/80 text-main hover:border-primary/50 hover:bg-surface-hover hover:text-primary transition-all shrink-0 cursor-pointer shadow-2xs"
-                >
-                  <Icon className={`w-3 h-3 ${tpl.color}`} />
-                  <span>{tpl.label}</span>
-                </button>
-              );
-            })}
-          </div>
+        {/* Main Prompt Textarea */}
+        <div className="p-4">
+          <textarea
+            ref={textareaRef}
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            onKeyDown={handleTextareaKeyDown}
+            placeholder="Co chcesz dzisiaj zrobić? Opisz zadanie, wklej kod lub wpisz /plan..."
+            rows={4}
+            className="w-full p-3.5 text-xs sm:text-sm rounded-xl bg-card border border-border text-main placeholder:text-subtle focus:outline-hidden focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all resize-y min-h-[110px] max-h-[260px] leading-relaxed"
+          />
+        </div>
 
-          {/* Main Prompt Input Field */}
-          <div className="relative">
-            <textarea
-              ref={textareaRef}
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              onKeyDown={handleTextareaKeyDown}
-              placeholder="Co chcesz dzisiaj zrobić? Opisz zadanie, wklej fragment kodu lub użyj /plan..."
-              rows={4}
-              className="w-full p-3.5 text-xs sm:text-sm rounded-xl bg-card border border-border text-main placeholder:text-subtle focus:outline-hidden focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all resize-y min-h-[110px] max-h-[220px] leading-relaxed"
-            />
-          </div>
+        {/* Compact Context & Action Bar */}
+        <div className="flex items-center justify-between px-4 py-2.5 border-t border-border bg-card/60 rounded-b-2xl gap-2" data-popover-root>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {/* Workspace Pill & Popover */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setOpenMenu(openMenu === 'workspace' ? null : 'workspace')}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
+                  openMenu === 'workspace'
+                    ? 'bg-primary/15 border-primary/40 text-primary'
+                    : 'bg-card border-border text-muted hover:text-main hover:bg-surface-hover'
+                }`}
+                title={workspacePath}
+              >
+                <FolderOpen className="w-3.5 h-3.5 text-primary shrink-0" />
+                <span className="font-mono max-w-[130px] truncate">{getWorkspaceDisplayName(workspacePath)}</span>
+                <ChevronDown className="w-3 h-3 text-subtle" />
+              </button>
 
-          {/* Context Control Bar */}
-          <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-            {/* Left: Workspace & Model */}
-            <div className="flex flex-wrap items-center gap-1.5" data-popover-root>
-              {/* Workspace Pill & Popover */}
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setOpenMenu(openMenu === 'workspace' ? null : 'workspace')}
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
-                    openMenu === 'workspace'
-                      ? 'bg-primary/15 border-primary/40 text-primary'
-                      : 'bg-card border-border text-muted hover:text-main hover:bg-surface-hover'
-                  }`}
-                  title={workspacePath}
-                >
-                  <FolderOpen className="w-3.5 h-3.5 text-primary shrink-0" />
-                  <span className="font-mono max-w-[140px] truncate">{getWorkspaceDisplayName(workspacePath)}</span>
-                  <ChevronDown className="w-3 h-3 text-subtle" />
-                </button>
-
-                {openMenu === 'workspace' && (
-                  <div className="absolute left-0 top-full mt-1.5 w-[310px] sm:w-[350px] bg-card border border-border rounded-xl shadow-xl z-50 p-3 max-h-[calc(100vh-180px)] overflow-y-auto animate-in fade-in zoom-in-95 duration-100">
-                    <div className="text-[11px] font-semibold text-main mb-2">Wybierz katalog roboczy</div>
-                    
-                    {/* Path input */}
-                    <div className="relative mb-2.5">
-                      <input
-                        type="text"
-                        value={workspacePath}
-                        onChange={(e) => setWorkspacePath(e.target.value)}
-                        placeholder="/home/adam/projects/my-domain"
-                        className="w-full px-2.5 py-1.5 text-xs font-mono rounded-lg bg-surface border border-border text-main focus:outline-hidden focus:border-primary"
-                      />
-                    </div>
-
-                    {/* Common directories */}
-                    <div className="text-[10px] font-medium text-muted uppercase tracking-wider mb-1.5">
-                      Częste katalogi
-                    </div>
-                    <div className="flex flex-wrap gap-1 mb-2.5">
-                      {COMMON_DIRECTORIES.map((dir) => {
-                        const Icon = dir.icon;
-                        const isSelected = workspacePath === dir.path;
-                        return (
-                          <button
-                            key={dir.path}
-                            type="button"
-                            onClick={() => {
-                              setWorkspacePath(dir.path);
-                              setOpenMenu(null);
-                            }}
-                            className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium border transition-colors cursor-pointer ${
-                              isSelected
-                                ? 'bg-primary/15 border-primary/40 text-primary font-semibold'
-                                : 'bg-surface border-border text-muted hover:text-main hover:bg-surface-hover'
-                            }`}
-                          >
-                            <Icon className="w-3 h-3 text-subtle" />
-                            <span>{dir.label}</span>
-                          </button>
-                        );
-                      })}
-
-                      {availableDirs.map((dir) => {
-                        if (COMMON_DIRECTORIES.some((c) => c.path === dir.path)) return null;
-                        const isSelected = workspacePath === dir.path;
-                        return (
-                          <button
-                            key={dir.path}
-                            type="button"
-                            onClick={() => {
-                              setWorkspacePath(dir.path);
-                              setOpenMenu(null);
-                            }}
-                            className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium border transition-colors cursor-pointer ${
-                              isSelected
-                                ? 'bg-primary/15 border-primary/40 text-primary font-semibold'
-                                : 'bg-surface border-border text-muted hover:text-main hover:bg-surface-hover'
-                            }`}
-                          >
-                            <Folder className="w-3 h-3 text-subtle" />
-                            <span>{dir.name}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {/* Dedicated Full Tree Modal Launcher */}
-                    <div className="pt-2 border-t border-border">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setOpenMenu(null);
-                          setIsTreeModalOpen(true);
-                        }}
-                        className="flex items-center justify-between w-full px-2.5 py-2 rounded-xl bg-surface border border-border hover:border-primary/40 hover:bg-surface-hover text-xs font-medium text-main transition-colors cursor-pointer group"
-                      >
-                        <span className="flex items-center gap-2 text-primary font-medium">
-                          <FolderTree className="w-4 h-4" />
-                          <span>Przeglądaj drzewo folderów...</span>
-                        </span>
-                        <ChevronRight className="w-3.5 h-3.5 text-muted group-hover:text-main group-hover:translate-x-0.5 transition-all" />
-                      </button>
-                    </div>
+              {openMenu === 'workspace' && (
+                <div className="absolute left-0 top-full mt-1.5 w-[300px] sm:w-[340px] bg-card border border-border rounded-xl shadow-xl z-50 p-3 max-h-[calc(100vh-180px)] overflow-y-auto animate-in fade-in zoom-in-95 duration-100">
+                  <div className="text-[11px] font-semibold text-main mb-2">Wybierz katalog roboczy</div>
+                  
+                  {/* Path input */}
+                  <div className="relative mb-2.5">
+                    <input
+                      type="text"
+                      value={workspacePath}
+                      onChange={(e) => setWorkspacePath(e.target.value)}
+                      placeholder="/home/adam/projects/my-domain"
+                      className="w-full px-2.5 py-1.5 text-xs font-mono rounded-lg bg-surface border border-border text-main focus:outline-hidden focus:border-primary"
+                    />
                   </div>
-                )}
-              </div>
 
-              {/* Model Pill & Popover */}
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setOpenMenu(openMenu === 'model' ? null : 'model')}
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
-                    openMenu === 'model'
-                      ? 'bg-primary/15 border-primary/40 text-primary'
-                      : 'bg-card border-border text-muted hover:text-main hover:bg-surface-hover'
-                  }`}
-                >
-                  <Zap className="w-3.5 h-3.5 text-primary shrink-0" />
-                  <span>{currentModelDef.name}</span>
-                  <ChevronDown className="w-3 h-3 text-subtle" />
-                </button>
-
-                {openMenu === 'model' && (
-                  <div className="absolute left-0 top-full mt-1.5 w-[260px] sm:w-[290px] bg-card border border-border rounded-xl shadow-xl z-50 p-2 space-y-1 max-h-[260px] overflow-y-auto animate-in fade-in zoom-in-95 duration-100">
-                    <div className="px-2 py-1 text-[11px] font-semibold text-main">Wybierz model AI</div>
-                    {AVAILABLE_MODELS.map((m) => {
-                      const isSelected = selectedModel === m.id;
+                  {/* Common directories */}
+                  <div className="text-[10px] font-medium text-muted uppercase tracking-wider mb-1.5">
+                    Częste katalogi
+                  </div>
+                  <div className="flex flex-wrap gap-1 mb-2.5">
+                    {COMMON_DIRECTORIES.map((dir) => {
+                      const Icon = dir.icon;
+                      const isSelected = workspacePath === dir.path;
                       return (
                         <button
-                          key={m.id}
+                          key={dir.path}
                           type="button"
                           onClick={() => {
-                            setSelectedModel(m.id);
+                            setWorkspacePath(dir.path);
                             setOpenMenu(null);
                           }}
-                          className={`flex items-center justify-between w-full px-2.5 py-2 rounded-lg text-left transition-colors cursor-pointer ${
+                          className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium border transition-colors cursor-pointer ${
                             isSelected
-                              ? 'bg-primary/15 text-primary font-semibold'
-                              : 'hover:bg-surface-hover text-muted hover:text-main'
+                              ? 'bg-primary/15 border-primary/40 text-primary font-semibold'
+                              : 'bg-surface border-border text-muted hover:text-main hover:bg-surface-hover'
                           }`}
                         >
-                          <div>
-                            <div className="text-xs font-medium leading-tight">{m.name}</div>
-                            <div className="text-[10px] text-muted">{m.badge}</div>
-                          </div>
-                          {isSelected && <Check className="w-3.5 h-3.5 text-primary shrink-0 ml-2" />}
+                          <Icon className="w-3 h-3 text-subtle" />
+                          <span>{dir.label}</span>
+                        </button>
+                      );
+                    })}
+
+                    {availableDirs.map((dir) => {
+                      if (COMMON_DIRECTORIES.some((c) => c.path === dir.path)) return null;
+                      const isSelected = workspacePath === dir.path;
+                      return (
+                        <button
+                          key={dir.path}
+                          type="button"
+                          onClick={() => {
+                            setWorkspacePath(dir.path);
+                            setOpenMenu(null);
+                          }}
+                          className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium border transition-colors cursor-pointer ${
+                            isSelected
+                              ? 'bg-primary/15 border-primary/40 text-primary font-semibold'
+                              : 'bg-surface border-border text-muted hover:text-main hover:bg-surface-hover'
+                          }`}
+                        >
+                          <Folder className="w-3 h-3 text-subtle" />
+                          <span>{dir.name}</span>
                         </button>
                       );
                     })}
                   </div>
-                )}
-              </div>
+
+                  {/* Dedicated Full Tree Modal Launcher */}
+                  <div className="pt-2 border-t border-border">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOpenMenu(null);
+                        setIsTreeModalOpen(true);
+                      }}
+                      className="flex items-center justify-between w-full px-2.5 py-2 rounded-xl bg-surface border border-border hover:border-primary/40 hover:bg-surface-hover text-xs font-medium text-main transition-colors cursor-pointer group"
+                    >
+                      <span className="flex items-center gap-2 text-primary font-medium">
+                        <FolderTree className="w-4 h-4" />
+                        <span>Przeglądaj strukturę folderów...</span>
+                      </span>
+                      <ChevronRight className="w-3.5 h-3.5 text-muted group-hover:text-main group-hover:translate-x-0.5 transition-all" />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Right side: Advanced Options toggle */}
-            <div>
+            {/* Model Pill & Popover */}
+            <div className="relative">
               <button
                 type="button"
-                onClick={() => setShowAdvanced(!showAdvanced)}
+                onClick={() => setOpenMenu(openMenu === 'model' ? null : 'model')}
                 className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
-                  showAdvanced
-                    ? 'text-primary bg-primary/10 border-primary/30'
-                    : 'text-muted border-border bg-card hover:text-main hover:bg-surface-hover'
+                  openMenu === 'model'
+                    ? 'bg-primary/15 border-primary/40 text-primary'
+                    : 'bg-card border-border text-muted hover:text-main hover:bg-surface-hover'
                 }`}
-                title="Więcej opcji (poziom myślenia, własna nazwa)"
               >
-                <Sliders className="w-3.5 h-3.5 text-primary" />
-                <span>Opcje</span>
-                <ChevronDown className={`w-3 h-3 text-subtle transition-transform duration-150 ${showAdvanced ? 'rotate-180' : ''}`} />
+                <Zap className="w-3.5 h-3.5 text-primary shrink-0" />
+                <span>{currentModelDef.name}</span>
+                <ChevronDown className="w-3 h-3 text-subtle" />
               </button>
-            </div>
-          </div>
 
-          {/* Expandable Advanced Options Panel */}
-          {showAdvanced && (
-            <div className="p-3 rounded-xl bg-card border border-border/80 space-y-2.5 animate-in fade-in duration-150">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                {/* Reasoning Effort segmented control */}
-                {currentModelDef.supportsEffort ? (
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-medium text-muted flex items-center gap-1">
-                      <Brain className="w-3 h-3 text-primary" />
-                      Namysł:
-                    </span>
-                    <div className="inline-flex rounded-lg border border-border bg-surface p-0.5">
-                      {EFFORT_OPTIONS.map((opt) => {
-                        const isSelected = effort === opt.id;
-                        return (
-                          <button
-                            key={opt.id}
-                            type="button"
-                            onClick={() => setEffort(opt.id)}
-                            className={`px-2 py-0.5 rounded-md text-[11px] font-medium transition-colors cursor-pointer ${
-                              isSelected
-                                ? 'bg-primary text-white font-semibold shadow-xs'
-                                : 'text-muted hover:text-main'
-                            }`}
-                            title={opt.desc}
-                          >
-                            {opt.label.split(' ')[0]}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-[11px] text-muted">
-                    Model używa wbudowanego poziomu myślenia
-                  </div>
-                )}
-
-                {/* Optional Custom Title input */}
-                <div className="flex items-center gap-1.5 flex-1 sm:max-w-xs sm:ml-auto">
-                  <Tag className="w-3 h-3 text-muted shrink-0" />
-                  <input
-                    type="text"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="Własna nazwa zadania (opcjonalna)..."
-                    className="w-full px-2.5 py-1 text-xs rounded-lg bg-surface border border-border text-main placeholder:text-muted/60 focus:outline-hidden focus:border-primary"
-                  />
+              {openMenu === 'model' && (
+                <div className="absolute left-0 top-full mt-1.5 w-[250px] sm:w-[280px] bg-card border border-border rounded-xl shadow-xl z-50 p-2 space-y-1 max-h-[260px] overflow-y-auto animate-in fade-in zoom-in-95 duration-100">
+                  <div className="px-2 py-1 text-[11px] font-semibold text-main">Wybierz model AI</div>
+                  {AVAILABLE_MODELS.map((m) => {
+                    const isSelected = selectedModel === m.id;
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedModel(m.id);
+                          setOpenMenu(null);
+                        }}
+                        className={`flex items-center justify-between w-full px-2.5 py-1.5 rounded-lg text-left transition-colors cursor-pointer ${
+                          isSelected
+                            ? 'bg-primary/15 text-primary font-semibold'
+                            : 'hover:bg-surface-hover text-muted hover:text-main'
+                        }`}
+                      >
+                        <div className="text-xs font-medium">{m.name}</div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] text-muted">{m.badge}</span>
+                          {isSelected && <Check className="w-3.5 h-3.5 text-primary shrink-0" />}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
-              </div>
+              )}
             </div>
-          )}
-        </div>
-
-        {/* Footer Actions */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-t border-border bg-card/60 rounded-b-2xl">
-          <div className="text-[11px] text-muted hidden sm:block">
-            <kbd className="px-1.5 py-0.5 rounded-sm bg-surface border border-border font-mono text-[10px] text-main">↵ Enter</kbd> aby uruchomić · <kbd className="px-1.5 py-0.5 rounded-sm bg-surface border border-border font-mono text-[10px] text-main">Shift+Enter</kbd> nowa linia
           </div>
 
-          <div className="flex items-center gap-2 ml-auto">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-3.5 py-1.5 text-xs font-medium rounded-xl border border-border bg-card text-muted hover:text-main hover:bg-surface-hover transition-colors cursor-pointer"
-            >
-              Anuluj
-            </button>
+          {/* Right side: Enter hint & Start button */}
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-[10px] text-muted hidden sm:inline-block">
+              <kbd className="px-1.5 py-0.5 rounded-sm bg-surface border border-border font-mono text-[10px] text-main">↵ Enter</kbd>
+            </span>
             <button
               type="button"
               onClick={() => handleSubmit()}
-              className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold rounded-xl bg-primary text-white hover:bg-primary-hover shadow-sm transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-primary text-white hover:bg-primary-hover shadow-xs transition-colors cursor-pointer"
             >
               <Sparkles className="w-3.5 h-3.5" />
-              <span>{prompt.trim() ? 'Rozpocznij zadanie' : 'Utwórz zadanie'}</span>
+              <span>Rozpocznij</span>
             </button>
           </div>
         </div>
