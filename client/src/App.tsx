@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTheme } from '@/hooks/useTheme';
 import { useSessions } from '@/hooks/useSessions';
 import { useSessionStream } from '@/hooks/useSessionStream';
@@ -11,7 +11,7 @@ import { Inspector } from '@/components/Inspector';
 import { MobileNavigation } from '@/components/MobileNavigation';
 import { ToastNotification } from '@/components/ToastNotification';
 import { NewSessionModal } from '@/components/NewSessionModal';
-import { ActiveTab, InspectorTab, ToastMessage } from '@/types';
+import { ActiveTab, InspectorTab, ReasoningEffort, ToastMessage } from '@/types';
 
 export default function App() {
   const { theme, toggleTheme } = useTheme();
@@ -65,6 +65,37 @@ export default function App() {
   const [selectedSubagentId, setSelectedSubagentId] = useState<string | null>(null);
   const [isNewSessionModalOpen, setIsNewSessionModalOpen] = useState(false);
   const [activeDiffsCount, setActiveDiffsCount] = useState(0);
+
+  // Pending initial prompt for newly created session (Prompt-First Quick Launcher)
+  const [pendingInitialPrompt, setPendingInitialPrompt] = useState<{
+    text: string;
+    model?: string;
+    effort?: ReasoningEffort;
+  } | null>(null);
+
+  useEffect(() => {
+    if (
+      pendingInitialPrompt &&
+      activeSessionId &&
+      (connectionStatus === 'connected' || connectionStatus === 'streaming')
+    ) {
+      const promptToSend = pendingInitialPrompt;
+      setPendingInitialPrompt(null);
+      sendPrompt(promptToSend.text, promptToSend.model, promptToSend.effort);
+    }
+  }, [pendingInitialPrompt, activeSessionId, connectionStatus, sendPrompt]);
+
+  useEffect(() => {
+    if (!pendingInitialPrompt || !activeSessionId) return;
+    const timer = setTimeout(() => {
+      if (pendingInitialPrompt) {
+        const promptToSend = pendingInitialPrompt;
+        setPendingInitialPrompt(null);
+        sendPrompt(promptToSend.text, promptToSend.model, promptToSend.effort);
+      }
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, [pendingInitialPrompt, activeSessionId, sendPrompt]);
 
   // Toasts
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -278,8 +309,20 @@ export default function App() {
         onClose={() => setIsNewSessionModalOpen(false)}
         defaultWorkspacePath={activeWorkspacePath}
         onSubmit={async (params) => {
-          await createNewSession(params);
+          await createNewSession({
+            title: params.title,
+            workspace_path: params.workspace_path,
+            model: params.model,
+            effort: params.effort,
+          });
           addToast('success', `Utworzono zadanie w katalogu: ${params.workspace_path}`);
+          if (params.initialPrompt?.trim()) {
+            setPendingInitialPrompt({
+              text: params.initialPrompt.trim(),
+              model: params.model,
+              effort: params.effort,
+            });
+          }
         }}
       />
 
