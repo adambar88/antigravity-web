@@ -34,14 +34,20 @@ const COMMON_DIRECTORIES = [
   { label: 'scripts', path: '/home/adam/scripts', icon: Folder },
 ];
 
-const AVAILABLE_MODELS = [
-  { id: 'gemini-3.8-flash-medium', name: 'Gemini 3.8 Flash', tag: 'Domyślny (Medium)' },
-  { id: 'gemini-3.8-flash-high', name: 'Gemini 3.8 Flash (High)', tag: 'Głębokie myślenie' },
-  { id: 'gemini-3.7-flash-high', name: 'Gemini 3.7 Flash', tag: 'Szybki' },
-  { id: 'gemini-3.1-pro-high', name: 'Gemini 3.1 Pro', tag: 'Zaawansowany' },
-  { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', tag: 'Thinking' },
-  { id: 'claude-opus-4-6-thinking', name: 'Claude Opus 4.6', tag: 'Reasoning' },
-  { id: 'gpt-oss-120b-medium', name: 'GPT-OSS 120B', tag: 'Open Source' },
+interface ModelDefinition {
+  id: string;
+  name: string;
+  desc: string;
+  supportsEffort: boolean;
+}
+
+const AVAILABLE_MODELS: ModelDefinition[] = [
+  { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash', desc: 'Najszybszy i wszechstronny', supportsEffort: true },
+  { id: 'gemini-3.7-flash', name: 'Gemini 3.7 Flash', desc: 'Wysoka responsywność', supportsEffort: true },
+  { id: 'gemini-3.1-pro', name: 'Gemini 3.1 Pro', desc: 'Głębokie wnioskowanie i kod', supportsEffort: true },
+  { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', desc: 'Thinking (Claude)', supportsEffort: false },
+  { id: 'claude-opus-4-6-thinking', name: 'Claude Opus 4.6', desc: 'Reasoning (Claude)', supportsEffort: false },
+  { id: 'gpt-oss-120b-medium', name: 'GPT-OSS 120B', desc: 'Open Source', supportsEffort: false },
 ];
 
 export const NewSessionModal: React.FC<NewSessionModalProps> = ({
@@ -52,10 +58,12 @@ export const NewSessionModal: React.FC<NewSessionModalProps> = ({
 }) => {
   const [title, setTitle] = useState('');
   const [workspacePath, setWorkspacePath] = useState(defaultWorkspacePath);
-  const [selectedModel, setSelectedModel] = useState('gemini-3.8-flash-medium');
+  const [selectedModel, setSelectedModel] = useState('gemini-3.8-flash');
   const [effort, setEffort] = useState<ReasoningEffort>('medium');
   const [availableDirs, setAvailableDirs] = useState<{ name: string; path: string }[]>([]);
   const [showFolderTree, setShowFolderTree] = useState(true);
+
+  const currentModelDef = AVAILABLE_MODELS.find((m) => m.id === selectedModel) || AVAILABLE_MODELS[0];
 
   useEffect(() => {
     if (isOpen) {
@@ -73,10 +81,20 @@ export const NewSessionModal: React.FC<NewSessionModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    let modelIdToSubmit = selectedModel;
+    if (selectedModel.startsWith('gemini-3.8-flash')) {
+      modelIdToSubmit = `gemini-3.8-flash-${effort}`;
+    } else if (selectedModel.startsWith('gemini-3.7-flash')) {
+      modelIdToSubmit = `gemini-3.7-flash-${effort}`;
+    } else if (selectedModel.startsWith('gemini-3.1-pro')) {
+      modelIdToSubmit = effort === 'medium' ? 'gemini-3.1-pro-high' : `gemini-3.1-pro-${effort}`;
+    }
+
     onSubmit({
       title: title.trim() || 'Nowe zadanie',
       workspace_path: workspacePath.trim() || '/home/adam',
-      model: selectedModel,
+      model: modelIdToSubmit,
       effort,
     });
     onClose();
@@ -240,7 +258,7 @@ export const NewSessionModal: React.FC<NewSessionModalProps> = ({
                   >
                     <div>
                       <div className="text-xs font-medium text-main">{m.name}</div>
-                      <div className="text-[10px] text-muted">{m.tag}</div>
+                      <div className="text-[10px] text-muted">{m.desc}</div>
                     </div>
                     {isSelected && <Check className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />}
                   </button>
@@ -251,9 +269,16 @@ export const NewSessionModal: React.FC<NewSessionModalProps> = ({
 
           {/* Reasoning Effort */}
           <div>
-            <label className="block text-xs font-semibold text-main mb-1.5">
-              Poziom myślenia (Reasoning Effort)
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-semibold text-main">
+                Poziom myślenia (Reasoning Effort)
+              </label>
+              {!currentModelDef.supportsEffort && (
+                <span className="text-[10px] text-muted italic">
+                  Model z wbudowanym trybem myślenia
+                </span>
+              )}
+            </div>
             <div className="grid grid-cols-3 gap-2">
               {(['low', 'medium', 'high'] as ReasoningEffort[]).map((lvl) => {
                 const isSelected = effort === lvl;
@@ -266,11 +291,14 @@ export const NewSessionModal: React.FC<NewSessionModalProps> = ({
                   <button
                     key={lvl}
                     type="button"
+                    disabled={!currentModelDef.supportsEffort}
                     onClick={() => setEffort(lvl)}
-                    className={`py-1.5 px-2 rounded-xl border text-center text-xs transition-colors cursor-pointer ${
-                      isSelected
-                        ? 'bg-primary/15 border-primary/40 text-primary font-semibold'
-                        : 'bg-card border-border text-muted hover:text-main hover:bg-surface-hover'
+                    className={`py-1.5 px-2 rounded-xl border text-center text-xs transition-colors ${
+                      !currentModelDef.supportsEffort
+                        ? 'opacity-40 cursor-not-allowed bg-card border-border text-muted'
+                        : isSelected
+                        ? 'bg-primary/15 border-primary/40 text-primary font-semibold cursor-pointer'
+                        : 'bg-card border-border text-muted hover:text-main hover:bg-surface-hover cursor-pointer'
                     }`}
                   >
                     {labels[lvl]}

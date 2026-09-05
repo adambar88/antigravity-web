@@ -27,14 +27,15 @@ export interface FolderTreePickerProps {
 
 interface RootOption {
   label: string;
+  shortLabel: string;
   path: string;
   icon: typeof Home;
 }
 
 const ROOT_OPTIONS: RootOption[] = [
-  { label: 'Katalog domowy (~/)', path: '/home/adam', icon: Home },
-  { label: 'Projekty (/projects)', path: '/home/adam/projects', icon: FolderOpen },
-  { label: 'Katalog główny (/)', path: '/', icon: HardDrive },
+  { label: 'Katalog domowy (~/)', shortLabel: 'Dom (~/)', path: '/home/adam', icon: Home },
+  { label: 'Projekty (/projects)', shortLabel: 'Projekty', path: '/home/adam/projects', icon: FolderOpen },
+  { label: 'Katalog główny (/)', shortLabel: 'Główny (/)', path: '/', icon: HardDrive },
 ];
 
 /**
@@ -373,7 +374,7 @@ export const FolderTreePicker: React.FC<FolderTreePickerProps> = ({
                   title={opt.path}
                 >
                   <Icon className="w-3 h-3" />
-                  <span>{opt.label.split(' ')[0]}</span>
+                  <span>{opt.shortLabel}</span>
                 </button>
               );
             })}

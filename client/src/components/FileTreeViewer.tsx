@@ -542,7 +542,7 @@ export const FileTreeViewer: React.FC<FileTreeViewerProps> = ({
 
           {/* Directory Tree */}
           <div className="flex-1 p-2 overflow-y-auto">
-            {isLoadingTree ? (
+            {isLoadingTree && filteredTree.length === 0 ? (
               <div className="flex items-center justify-center p-6 text-xs text-muted">
                 <Loader2 className="w-4 h-4 animate-spin mr-2 text-primary" />
                 Ładowanie plików...

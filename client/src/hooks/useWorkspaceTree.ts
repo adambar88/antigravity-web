@@ -50,19 +50,25 @@ export function useWorkspaceTree(optionsOrPath?: string | UseWorkspaceTreeOption
     }
   }, [workspacePath]);
 
-  const fetchTree = useCallback(async (targetRoot?: unknown) => {
+  const selectedFilePathRef = useRef(selectedFilePath);
+  selectedFilePathRef.current = selectedFilePath;
+
+  const fetchTree = useCallback(async (targetRoot?: unknown, silent = false) => {
     const validTarget = typeof targetRoot === 'string' && targetRoot.trim() ? targetRoot.trim() : null;
     const activeRoot = validTarget || rootPath || workspacePath || '/home/adam';
-    setIsLoadingTree(true);
+    if (!silent) {
+      setIsLoadingTree(true);
+    }
     try {
       const res = await api.getWorkspaceTree(activeRoot, 8);
       setTree(res.tree || []);
       const newRoot = res.root || activeRoot;
       setRootPath(newRoot);
 
-      if (selectedFilePath) {
+      const currentSelected = selectedFilePathRef.current;
+      if (currentSelected) {
         try {
-          const fileRes = await api.getWorkspaceFile(selectedFilePath, newRoot);
+          const fileRes = await api.getWorkspaceFile(currentSelected, newRoot);
           setSelectedFileContent(fileRes);
         } catch {
           // zachowaj obecny podgląd, jeśli odświeżenie pliku nie powiodło się
@@ -71,55 +77,37 @@ export function useWorkspaceTree(optionsOrPath?: string | UseWorkspaceTreeOption
     } catch (err) {
       console.warn('Nie udało się pobrać drzewa projektu:', err);
     } finally {
-      setIsLoadingTree(false);
+      if (!silent) {
+        setIsLoadingTree(false);
+      }
     }
-  }, [rootPath, workspacePath, selectedFilePath]);
+  }, [rootPath, workspacePath]);
 
   const refreshTree = useCallback(async () => {
-    await fetchTree();
-  }, [fetchTree]);
+    await fetchTree(workspacePath);
+  }, [fetchTree, workspacePath]);
 
   // Initial fetch and on workspacePath change
   useEffect(() => {
     fetchTree(workspacePath);
   }, [workspacePath, fetchTree]);
 
-  // Auto-refresh when tab switches to 'files' or inspector is opened on 'files'
+  // Fetch when tab switches to 'files' only if tree hasn't loaded yet
   const isFilesTabActive = isOpen && (!activeTab || activeTab === 'files');
   useEffect(() => {
-    if (isFilesTabActive) {
+    if (isFilesTabActive && tree.length === 0) {
       fetchTree(workspacePath);
     }
-  }, [isFilesTabActive, workspacePath, fetchTree]);
+  }, [isFilesTabActive, workspacePath, fetchTree, tree.length]);
 
-  // Auto-refresh when generation finishes (e.g. after tool execution finishes creating/deleting files)
+  // Quiet refresh when generation finishes (e.g. after tool execution finishes creating/deleting files)
   const prevGeneratingRef = useRef(isGenerating);
   useEffect(() => {
     if (prevGeneratingRef.current && !isGenerating && isFilesTabActive) {
-      fetchTree(workspacePath);
+      fetchTree(workspacePath, true);
     }
     prevGeneratingRef.current = isGenerating;
   }, [isGenerating, isFilesTabActive, workspacePath, fetchTree]);
-
-  // Auto-refresh when browser window regains focus
-  useEffect(() => {
-    const handleFocus = () => {
-      if (isFilesTabActive) {
-        fetchTree(workspacePath);
-      }
-    };
-    window.addEventListener('focus', handleFocus);
-    return () => window.removeEventListener('focus', handleFocus);
-  }, [isFilesTabActive, workspacePath, fetchTree]);
-
-  // Periodic background refresh every 10s when user is in the Files tab
-  useEffect(() => {
-    if (!isFilesTabActive) return;
-    const interval = setInterval(() => {
-      fetchTree(workspacePath);
-    }, 10000);
-    return () => clearInterval(interval);
-  }, [isFilesTabActive, workspacePath, fetchTree]);
 
   const toggleFolder = useCallback(async (folderPath: string) => {
     setExpandedFolders((prev) => {
