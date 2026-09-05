@@ -8,7 +8,7 @@ export function getExpectedToken(): string {
 }
 
 export function isAuthDisabled(): boolean {
-  return process.env.AUTH_DISABLED === 'true' || (!process.env.AUTH_TOKEN && !process.env.DEV_AUTH_TOKEN);
+  return process.env.AUTH_DISABLED === 'true';
 }
 
 /**

@@ -300,6 +300,7 @@ export default function App() {
           onTabSelect={handleMobileTabSelect}
           diffsCount={activeDiffsCount || diffs.length}
           subagentsCount={subagents.length}
+          artifactsCount={artifacts.length}
         />
       </div>
 

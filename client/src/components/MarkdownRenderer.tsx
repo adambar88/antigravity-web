@@ -1,6 +1,17 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, Suspense, lazy } from 'react';
 import { marked } from 'marked';
-import { MermaidDiagram, isMermaidCode } from './MermaidDiagram';
+import { isMermaidCode } from '@/utils/mermaidHelper';
+
+const MermaidDiagram = lazy(() =>
+  import('./MermaidDiagram').then((mod) => ({ default: mod.MermaidDiagram }))
+);
+
+const MermaidSkeleton: React.FC = () => (
+  <div className="my-3 p-4 rounded-xl border border-border bg-surface/50 flex items-center justify-center gap-2 text-xs text-muted animate-pulse">
+    <div className="w-4 h-4 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+    <span>Ładowanie diagramu...</span>
+  </div>
+);
 
 interface MarkdownRendererProps {
   content: string;
@@ -62,10 +73,12 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = React.memo(
         {segments.map((segment, index) => {
           if (segment.type === 'mermaid') {
             return (
-              <MermaidDiagram
+              <Suspense
                 key={`mermaid-${index}-${segment.code.slice(0, 20)}`}
-                chart={segment.code}
-              />
+                fallback={<MermaidSkeleton />}
+              >
+                <MermaidDiagram chart={segment.code} />
+              </Suspense>
             );
           }
 

@@ -68,7 +68,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const filteredSessions = useMemo(() => {
     if (!searchQuery.trim()) return sessions;
     const q = searchQuery.toLowerCase();
-    return sessions.filter((s) => s.title.toLowerCase().includes(q));
+    return sessions.filter(
+      (s) =>
+        s.title.toLowerCase().includes(q) ||
+        (s.workspace_path && s.workspace_path.toLowerCase().includes(q))
+    );
   }, [sessions, searchQuery]);
 
   const grouped = useMemo(() => {

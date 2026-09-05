@@ -31,6 +31,11 @@ export default defineConfig({
     minify: 'esbuild',
     cssCodeSplit: true,
     chunkSizeWarningLimit: 800,
+    modulePreload: {
+      resolveDependencies(_filename, deps) {
+        return deps.filter((dep) => !dep.includes('mermaid'));
+      },
+    },
     rollupOptions: {
       output: {
         manualChunks(id) {
