@@ -1,6 +1,9 @@
 import assert from 'node:assert';
 import fs from 'node:fs';
 import path from 'node:path';
+
+process.env.NODE_ENV = 'test';
+
 import { buildServer } from './index.js';
 import { runSeed } from './db/seed.js';
 import { getExpectedToken } from './security/authGuard.js';

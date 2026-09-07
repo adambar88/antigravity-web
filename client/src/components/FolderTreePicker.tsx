@@ -86,15 +86,24 @@ export const FolderTreePicker: React.FC<FolderTreePickerProps> = ({
   const treeContainerRef = useRef<HTMLDivElement>(null);
   const selectedItemRef = useRef<HTMLDivElement>(null);
 
+  const [loadErrors, setLoadErrors] = useState<Record<string, string>>({});
+
   // Load directories for a specific path
   const fetchDirectories = useCallback(async (dirPath: string): Promise<WorkspaceDirectoryItem[]> => {
     setLoadingPaths((prev) => new Set(prev).add(dirPath));
+    setLoadErrors((prev) => {
+      const next = { ...prev };
+      delete next[dirPath];
+      return next;
+    });
     try {
       const res = await api.getWorkspaceDirectories(dirPath);
       const items = res?.directories || [];
       setDirCache((prev) => ({ ...prev, [dirPath]: items }));
       return items;
-    } catch {
+    } catch (err: any) {
+      const msg = err?.message || 'Błąd wczytywania katalogu';
+      setLoadErrors((prev) => ({ ...prev, [dirPath]: msg }));
       setDirCache((prev) => ({ ...prev, [dirPath]: [] }));
       return [];
     } finally {
@@ -126,7 +135,7 @@ export const FolderTreePicker: React.FC<FolderTreePickerProps> = ({
   // Initial load when activeRoot or target changes
   useEffect(() => {
     preloadHierarchy(activeRoot, selectedPath);
-  }, [activeRoot]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeRoot, selectedPath, preloadHierarchy]);
 
   // Auto-scroll selected node into view after rendering
   useEffect(() => {
@@ -239,6 +248,24 @@ export const FolderTreePicker: React.FC<FolderTreePickerProps> = ({
         >
           <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
           <span>Wczytywanie folderów...</span>
+        </div>
+      );
+    }
+
+    if (loadErrors[dirPath]) {
+      return (
+        <div
+          style={{ paddingLeft: `${level * 16 + 24}px` }}
+          className="flex items-center gap-2 py-1.5 text-xs text-rose-500"
+        >
+          <span>{loadErrors[dirPath]}</span>
+          <button
+            type="button"
+            onClick={() => fetchDirectories(dirPath)}
+            className="px-2 py-0.5 text-[10px] rounded bg-rose-500/10 hover:bg-rose-500/20 underline cursor-pointer"
+          >
+            Spróbuj ponownie
+          </button>
         </div>
       );
     }
