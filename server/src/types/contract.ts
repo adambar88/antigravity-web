@@ -125,6 +125,8 @@ export interface CreateSessionRequest {
   workspace_path?: string;
   model?: string;
   effort?: ReasoningEffort;
+  initialPrompt?: string;
+  auto_title?: boolean;
 }
 
 export interface UpdateSessionRequest {
@@ -257,6 +259,7 @@ export interface SubagentUpdatePayload {
 
 export type SSEEventType =
   | 'session_status'
+  | 'session_title_updated'
   | 'thought_delta'
   | 'thought_complete'
   | 'message_delta'
@@ -271,6 +274,11 @@ export type SSEEventType =
   | 'subagent_update'
   | 'turn_error'
   | 'heartbeat';
+
+export interface SessionTitleUpdatedPayload {
+  id: string;
+  title: string;
+}
 
 export interface SSEEventEnvelope<T = unknown> {
   seq: number;

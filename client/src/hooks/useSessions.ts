@@ -147,6 +147,12 @@ export function useSessions() {
     );
   }, []);
 
+  const updateLocalSessionTitle = useCallback((id: string, title: string) => {
+    setSessions((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, title, updated_at: Date.now() } : s))
+    );
+  }, []);
+
   return {
     sessions,
     activeSessionId,
@@ -154,6 +160,7 @@ export function useSessions() {
     createNewSession,
     deleteSession,
     updateSessionTitle,
+    updateLocalSessionTitle,
     updateSessionWorkspace,
     isLoading,
     error,

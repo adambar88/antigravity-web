@@ -100,6 +100,15 @@ export const api = {
     return handleResponse<{ success: boolean }>(res);
   },
 
+  async generateTitle(prompt: string): Promise<{ title: string }> {
+    const res = await customFetch(`${BASE_URL}/sessions/generate-title`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt }),
+    });
+    return handleResponse<{ title: string }>(res);
+  },
+
   async sendPrompt(
     sessionId: string,
     prompt: string,

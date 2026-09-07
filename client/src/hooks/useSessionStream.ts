@@ -352,6 +352,14 @@ export function useSessionStream(sessionId: string | null) {
         break;
       }
 
+      case 'session_title_updated': {
+        const payload = envelope.payload as { id: string; title: string };
+        if (payload?.title) {
+          setSession((prev) => (prev ? { ...prev, title: payload.title } : prev));
+        }
+        break;
+      }
+
       case 'turn_error': {
         const payload = envelope.payload as { message: string };
         setIsGenerating(false);

@@ -23,6 +23,7 @@ export default function App() {
     createNewSession,
     deleteSession,
     updateSessionTitle,
+    updateLocalSessionTitle,
     updateSessionWorkspace,
   } = useSessions();
 
@@ -58,6 +59,13 @@ export default function App() {
 
   // UI Panels state
   const [isSidebarMobileOpen, setIsSidebarMobileOpen] = useState(false);
+
+  // Synchronize live session title changes (e.g. from SSE session_title_updated) with the sessions sidebar list
+  useEffect(() => {
+    if (session?.id && session?.title) {
+      updateLocalSessionTitle(session.id, session.title);
+    }
+  }, [session?.id, session?.title, updateLocalSessionTitle]);
   const [isInspectorOpen, setIsInspectorOpen] = useState(false);
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>('diffs');
   const [mobileTab, setMobileTab] = useState<ActiveTab>('chat');
@@ -315,6 +323,8 @@ export default function App() {
             workspace_path: params.workspace_path,
             model: params.model,
             effort: params.effort,
+            initialPrompt: params.initialPrompt,
+            auto_title: params.auto_title,
           });
           addToast('success', `Utworzono zadanie w katalogu: ${params.workspace_path}`);
           if (params.initialPrompt?.trim()) {

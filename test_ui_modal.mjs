@@ -54,15 +54,36 @@ function getWorkspaceDisplayName(p) {
   return parts[parts.length - 1] || p;
 }
 
-function resolveSessionTitle({ prompt, customTitle, workspacePath }) {
+function smartHeuristicTitle(prompt) {
+  const trimmed = prompt?.trim() || '';
+  if (!trimmed) return 'Nowe zadanie';
+
+  const firstLine = trimmed.split(/\r?\n/)[0].trim();
+  const firstClause = firstLine.split(/[.!?;,]/)[0].trim();
+
+  let cleaned = firstClause
+    .replace(/^(proszę( cię)?|prosze|chcę( aby| żeby)?|chce( aby| żeby)?|weź|musisz|mógłbyś|czy możesz|zrób tak żeby|zrób aby|potrzebuję)\s+/i, '')
+    .trim();
+
+  const words = cleaned.split(/\s+/).filter(Boolean);
+  if (words.length > 5) {
+    cleaned = words.slice(0, 5).join(' ');
+  }
+
+  if (!cleaned) return 'Nowe zadanie';
+  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+}
+
+function resolveSessionTitle({ prompt, customTitle, workspacePath, aiGeneratedTitle }) {
   const trimmedCustom = customTitle?.trim();
   if (trimmedCustom) return trimmedCustom;
 
-  const trimmedPrompt = prompt?.trim() || '';
-  const cleanOneLine = trimmedPrompt.replace(/\s+/g, ' ');
+  if (aiGeneratedTitle?.trim()) return aiGeneratedTitle.trim();
 
-  if (cleanOneLine) {
-    return cleanOneLine.slice(0, 48) + (cleanOneLine.length > 48 ? '…' : '');
+  const trimmedPrompt = prompt?.trim() || '';
+  if (trimmedPrompt) {
+    // Smart heuristic or AI title - NEVER raw prompt copy
+    return smartHeuristicTitle(trimmedPrompt);
   }
 
   return `Zadanie: ${getWorkspaceDisplayName(workspacePath)}`;
@@ -152,7 +173,7 @@ test('UI Test 4: Z-Index Layering guarantees no stacking conflict', () => {
   console.log('  [Test 4] Z-Index Hierarchy: ChangeWorkspaceModal (z-60) cleanly layers over NewSessionModal (z-50)');
 });
 
-test('UI Test 5: Session Title Resolution Strategy', () => {
+test('UI Test 5: Session Title Resolution Strategy (AI-first, no verbatim copying)', () => {
   // Scenario A: User provides custom title
   const titleA = resolveSessionTitle({
     prompt: 'Zrób refaktoryzację',
@@ -161,24 +182,25 @@ test('UI Test 5: Session Title Resolution Strategy', () => {
   });
   assert.strictEqual(titleA, 'Mój Specjalny Projekt');
 
-  // Scenario B: Prompt is short
+  // Scenario B: AI generated title provided
   const titleB = resolveSessionTitle({
-    prompt: 'Napraw błąd w logowaniu',
+    prompt: 'Zaimplementuj uwierzytelnianie Google OAuth i dodaj przycisk logowania w navbarze',
     customTitle: '',
     workspacePath: '/home/adam/projects/my-domain',
+    aiGeneratedTitle: 'Implementacja Google OAuth w navbarze',
   });
-  assert.strictEqual(titleB, 'Napraw błąd w logowaniu');
+  assert.strictEqual(titleB, 'Implementacja Google OAuth w navbarze');
 
-  // Scenario C: Prompt is long (over 48 chars)
+  // Scenario C: Long prompt without custom title uses concise heuristic (NEVER verbatim cut-off sentence)
   const titleC = resolveSessionTitle({
-    prompt: 'Przeanalizuj apkę antigravity-web i zaproponuj usprawnienia wydajnościowe oraz bezpieczeństwa',
+    prompt: 'nie chce zeby tresc promptu pierwszego byla slowo w slowo tytulem nowego zadania. Chce aby tresc tytulu byl wygenerowana przez AI bazujac na pierwszym prompcie, tak jak to robi Antigravity',
     customTitle: '',
     workspacePath: '/home/adam/projects/my-domain',
   });
-  assert.ok(titleC.length <= 50, 'Truncated title should be <= 50 characters');
-  assert.ok(titleC.endsWith('…'), 'Truncated title should end with ellipsis');
+  assert.strictEqual(titleC.includes('…'), false, 'Title should not end with raw ellipsis cut-off');
+  assert.ok(titleC.length < 60, 'Title should be concise');
 
-  // Scenario D: Prompt is empty
+  // Scenario D: Prompt is empty falls back to workspace folder
   const titleD = resolveSessionTitle({
     prompt: '',
     customTitle: '',
@@ -186,7 +208,7 @@ test('UI Test 5: Session Title Resolution Strategy', () => {
   });
   assert.strictEqual(titleD, 'Zadanie: my-domain');
 
-  console.log('  [Test 5] Title Resolution: all 4 naming strategies (custom, short prompt, truncated, fallback) pass 100%');
+  console.log('  [Test 5] Title Resolution: AI-first generation and smart non-verbatim fallback verified 100%');
 });
 
 test('UI Test 6: Model and Effort ID Encoding', () => {

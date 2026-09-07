@@ -16,6 +16,7 @@ import { processRegistry } from '../agent/processGroup.js';
 import { runAgentTurn, sessionEventHub } from '../agent/protocolTranslator.js';
 import { getSubagentsForSession, getSubagentDetails } from '../agent/subagentTracker.js';
 import { getDefaultWorkspaceRoot } from '../security/workspaceGuard.js';
+import { generateSessionTitle } from '../agent/titleGenerator.js';
 import type {
   ReasoningEffort,
   Session,
@@ -29,6 +30,12 @@ const CreateSessionSchema = z.object({
   workspace_path: z.string().optional(),
   model: z.string().optional(),
   effort: z.enum(['low', 'medium', 'high']).optional(),
+  initialPrompt: z.string().optional(),
+  auto_title: z.boolean().optional(),
+});
+
+const GenerateTitleSchema = z.object({
+  prompt: z.string().min(1, 'Prompt cannot be empty'),
 });
 
 const UpdateSessionSchema = z.object({
@@ -71,15 +78,51 @@ export const sessionRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
 
-    const { title, workspace_path, model, effort } = parseResult.data;
+    const { title, workspace_path, model, effort, initialPrompt, auto_title } = parseResult.data;
+    const resolvedPath = workspace_path || getDefaultWorkspaceRoot();
+    const folderName = path.basename(resolvedPath) || 'Projekt';
+
+    // If auto_title is requested or title not provided, start with clean placeholder
+    const shouldAutoTitle = auto_title || !title || title === 'Nowe zadanie' || title.startsWith('Zadanie:');
+    const initialTitle = title || `Zadanie: ${folderName}`;
+
     const session = createSession({
-      title: title || 'New Chat Session',
-      workspace_path: workspace_path || getDefaultWorkspaceRoot(),
+      title: initialTitle,
+      workspace_path: resolvedPath,
       model: model || 'gemini-3.8-flash-medium',
       effort: (effort as ReasoningEffort) || 'medium',
     });
 
+    // If initial prompt provided and auto title enabled, trigger background AI title generation
+    if (shouldAutoTitle && initialPrompt?.trim()) {
+      void generateSessionTitle(initialPrompt.trim()).then((aiTitle) => {
+        if (aiTitle && aiTitle !== initialTitle) {
+          updateSession(session.id, { title: aiTitle });
+          sessionEventHub.broadcast(session.id, 'session_title_updated', {
+            id: session.id,
+            title: aiTitle,
+          });
+        }
+      }).catch((err) => {
+        console.warn(`[AutoTitleError:${session.id}]`, err);
+      });
+    }
+
     return reply.status(201).send(session);
+  });
+
+  // POST /api/sessions/generate-title
+  fastify.post('/api/sessions/generate-title', async (req, reply) => {
+    const parseResult = GenerateTitleSchema.safeParse(req.body || {});
+    if (!parseResult.success) {
+      return reply.status(400).send({
+        error: 'Bad Request',
+        details: parseResult.error.flatten(),
+      });
+    }
+
+    const title = await generateSessionTitle(parseResult.data.prompt);
+    return reply.status(200).send({ title });
   });
 
   // GET /api/sessions/:id
@@ -185,6 +228,29 @@ export const sessionRoutes: FastifyPluginAsync = async (fastify) => {
             delete att.dataUrl;
           }
         }
+      }
+
+      // Auto-generate title if session title is still default
+      const isDefaultTitle =
+        !session.title ||
+        session.title === 'Nowe zadanie' ||
+        session.title === 'New Chat Session' ||
+        session.title.startsWith('Zadanie:');
+
+      if (isDefaultTitle && prompt.trim()) {
+        void generateSessionTitle(prompt.trim())
+          .then((aiTitle) => {
+            if (aiTitle && aiTitle !== session.title) {
+              updateSession(id, { title: aiTitle });
+              sessionEventHub.broadcast(id, 'session_title_updated', {
+                id,
+                title: aiTitle,
+              });
+            }
+          })
+          .catch((err) => {
+            console.warn(`[AutoTitleError:${id}]`, err);
+          });
       }
 
       // Launch the agent turn asynchronously

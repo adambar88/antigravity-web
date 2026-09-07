@@ -140,6 +140,22 @@ async function runTests() {
   assert.strictEqual(patched.effort, 'low');
   console.log('  ✓ Patched session validated\n');
 
+  // Test 9b: POST /api/sessions/generate-title
+  console.log('Test 9b: POST /api/sessions/generate-title');
+  const resGenTitle = await server.inject({
+    method: 'POST',
+    url: '/api/sessions/generate-title',
+    headers: authHeaders,
+    payload: {
+      prompt: 'Zaimplementuj uwierzytelnianie Google OAuth i dodaj przycisk logowania w menu nawigacyjnym',
+    },
+  });
+  assert.strictEqual(resGenTitle.statusCode, 200);
+  const genTitleData = JSON.parse(resGenTitle.payload);
+  assert(typeof genTitleData.title === 'string' && genTitleData.title.length > 0);
+  assert(!genTitleData.title.startsWith('"') && !genTitleData.title.endsWith('"'));
+  console.log(`  ✓ Generated title via AI endpoint: "${genTitleData.title}"\n`);
+
   // Test 10: Slash Command Interception via POST /prompt
   console.log('Test 10: Slash Command Interception (/help)');
   const resPromptSlash = await server.inject({
