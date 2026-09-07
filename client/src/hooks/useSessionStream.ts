@@ -130,7 +130,17 @@ export function useSessionStream(sessionId: string | null) {
         const data = await api.getSession(sessionId!);
         if (!isMounted) return;
         setSession(data);
-        setMessages(data.messages || []);
+        // Filter out empty streaming assistant placeholders that have no content, thought, or tools
+        const filteredMessages = (data.messages || []).filter((m) => {
+          if (m.role === 'assistant' && m.status === 'streaming') {
+            const hasContent = Boolean(m.content && m.content.trim());
+            const hasThought = Boolean(m.thought && m.thought.trim());
+            const hasTools = Boolean(m.tool_executions && m.tool_executions.length > 0);
+            return hasContent || hasThought || hasTools;
+          }
+          return true;
+        });
+        setMessages(filteredMessages);
         setArtifacts(data.artifacts || []);
         setSessionStatus(data.status || 'idle');
 
@@ -233,8 +243,10 @@ export function useSessionStream(sessionId: string | null) {
         setMessages((prev) => {
           const finalContent = payload.content || streamingContentRef.current;
           const finalThought = currentThoughtRef.current;
+          const targetId = payload.message_id;
+
           const newMsg: Message = {
-            id: payload.message_id || `msg-${Date.now()}`,
+            id: targetId || `msg-${Date.now()}`,
             session_id: sessionId || '',
             sequence_num: prev.length + 1,
             role: 'assistant',
@@ -245,6 +257,24 @@ export function useSessionStream(sessionId: string | null) {
             created_at: Date.now(),
             tool_executions: activeToolsRef.current.length > 0 ? [...activeToolsRef.current] : undefined,
           };
+
+          // If an assistant message with this ID already exists, or if there is a pending streaming assistant placeholder, update it in place!
+          const existingIdx = prev.findIndex(
+            (m) => (targetId && m.id === targetId) || (m.role === 'assistant' && m.status === 'streaming')
+          );
+
+          if (existingIdx !== -1) {
+            const updated = [...prev];
+            updated[existingIdx] = {
+              ...updated[existingIdx],
+              ...newMsg,
+              id: targetId || updated[existingIdx].id,
+              tool_executions:
+                newMsg.tool_executions || updated[existingIdx].tool_executions,
+            };
+            return updated;
+          }
+
           return [...prev, newMsg];
         });
 
@@ -269,36 +299,38 @@ export function useSessionStream(sessionId: string | null) {
           status: 'running',
           created_at: Date.now(),
         };
-        setActiveTools((prev) => [...prev, newTool]);
+        const updatedTools = [...activeToolsRef.current, newTool];
+        activeToolsRef.current = updatedTools;
+        setActiveTools(updatedTools);
         break;
       }
 
       case 'tool_progress': {
         const payload = envelope.payload as ToolProgressPayload;
-        setActiveTools((prev) =>
-          prev.map((t) =>
-            t.id === payload.tool_execution_id
-              ? { ...t, tool_result: (t.tool_result || '') + payload.chunk }
-              : t
-          )
+        const updatedTools = activeToolsRef.current.map((t) =>
+          t.id === payload.tool_execution_id
+            ? { ...t, tool_result: (t.tool_result || '') + payload.chunk }
+            : t
         );
+        activeToolsRef.current = updatedTools;
+        setActiveTools(updatedTools);
         break;
       }
 
       case 'tool_complete': {
         const payload = envelope.payload as ToolCompletePayload;
-        setActiveTools((prev) =>
-          prev.map((t) =>
-            t.id === payload.tool_execution_id
-              ? {
-                  ...t,
-                  status: payload.status,
-                  duration_ms: payload.duration_ms,
-                  tool_result: payload.output !== undefined ? payload.output : t.tool_result,
-                }
-              : t
-          )
+        const updatedTools = activeToolsRef.current.map((t) =>
+          t.id === payload.tool_execution_id
+            ? {
+                ...t,
+                status: payload.status,
+                duration_ms: payload.duration_ms,
+                tool_result: payload.output !== undefined ? payload.output : t.tool_result,
+              }
+            : t
         );
+        activeToolsRef.current = updatedTools;
+        setActiveTools(updatedTools);
         break;
       }
 

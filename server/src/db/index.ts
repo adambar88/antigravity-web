@@ -341,18 +341,31 @@ export function getSessionWithHistory(id: string, db = getDatabase()): HydratedS
   }
 
   // Stitch messages with their tool executions
-  const messages: Message[] = messageRows.map((m) => ({
-    id: m.id,
-    session_id: m.session_id,
-    sequence_num: m.sequence_num,
-    role: m.role,
-    content: m.content,
-    thought: m.thought,
-    thought_duration_ms: m.thought_duration_ms,
-    status: m.status,
-    created_at: m.created_at,
-    tool_executions: toolsByMessageId.get(m.id) || [],
-  }));
+  const messages: Message[] = messageRows
+    .filter((m) => {
+      // Filter out empty streaming placeholder assistant messages if they have no content, no thought, and no tools
+      if (m.role === 'assistant' && m.status === 'streaming') {
+        const hasContent = Boolean(m.content && m.content.trim());
+        const hasThought = Boolean(m.thought && m.thought.trim());
+        const tools = toolsByMessageId.get(m.id) || [];
+        if (!hasContent && !hasThought && tools.length === 0) {
+          return false;
+        }
+      }
+      return true;
+    })
+    .map((m) => ({
+      id: m.id,
+      session_id: m.session_id,
+      sequence_num: m.sequence_num,
+      role: m.role,
+      content: m.content,
+      thought: m.thought,
+      thought_duration_ms: m.thought_duration_ms,
+      status: m.status,
+      created_at: m.created_at,
+      tool_executions: toolsByMessageId.get(m.id) || [],
+    }));
 
   return {
     ...session,

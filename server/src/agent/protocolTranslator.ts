@@ -190,6 +190,7 @@ export async function runAgentTurn(options: RunAgentTurnOptions): Promise<void> 
   let thoughtStartMs: number | null = null;
   let thoughtDurationMs: number | null = null;
   let activeConversationId: string | null = session.agy_conversation_id || null;
+  let isMessageCompleteBroadcast = false;
 
   // Helper to read live reasoning from transcript.jsonl asynchronously without blocking the event loop
   let isPollingTranscript = false;
@@ -528,6 +529,8 @@ export async function runAgentTurn(options: RunAgentTurnOptions): Promise<void> 
         sessionEventHub.broadcast(sessionId, 'turn_error', { message: errMsg });
       } else if (res.response) {
         accumulatedResponse = res.response;
+      } else if (!accumulatedResponse) {
+        accumulatedResponse = 'Zadanie zostało zakończone.';
       }
 
       // Close child stdin upon receiving turn result so it exits cleanly
@@ -549,6 +552,7 @@ export async function runAgentTurn(options: RunAgentTurnOptions): Promise<void> 
       };
 
       sessionEventHub.broadcast(sessionId, 'message_complete', completePayload);
+      isMessageCompleteBroadcast = true;
     }
   };
 
@@ -634,10 +638,14 @@ export async function runAgentTurn(options: RunAgentTurnOptions): Promise<void> 
           message: stderrBuffer.trim() || `Proces zakończył się kodem błędu ${exitResult.code}`,
         });
       }
+    }
+
+    if (!isMessageCompleteBroadcast) {
       sessionEventHub.broadcast(sessionId, 'message_complete', {
         message_id: assistantMsgId,
         content: finalContent,
       });
+      isMessageCompleteBroadcast = true;
     }
 
     // Update the Assistant message in SQLite

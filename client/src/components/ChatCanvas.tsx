@@ -211,6 +211,15 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
               }
 
               // Assistant message
+              const hasThought = Boolean(msg.thought && msg.thought.trim());
+              const hasTools = Boolean(msg.tool_executions && msg.tool_executions.length > 0);
+              const hasContent = Boolean(msg.content && msg.content.trim());
+
+              // Never render an orphan bot avatar if there is no thought, tools, or content
+              if (!hasThought && !hasTools && !hasContent) {
+                return null;
+              }
+
               return (
                 <div key={msg.id} className="flex items-start gap-3 w-full max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mr-auto justify-start">
                   <div className="w-8 h-8 rounded-xl bg-primary/15 border border-primary/30 flex items-center justify-center text-primary shrink-0 mt-0.5 shadow-2xs">
