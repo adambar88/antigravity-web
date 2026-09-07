@@ -27,7 +27,21 @@ export function getDatabase(customPath?: string): Database.Database {
     return dbInstance;
   }
 
-  const defaultDir = path.resolve(process.cwd(), 'data');
+  // Determine persistent database directory:
+  // Prefer /home/adam/.antigravity-web (bind-mounted to host, persists across container rebuilds)
+  let defaultDir = path.resolve(process.cwd(), 'data');
+  const persistentHomeDir = path.join(process.env.HOME || '/home/adam', '.antigravity-web');
+  try {
+    if (fs.existsSync(process.env.HOME || '/home/adam')) {
+      if (!fs.existsSync(persistentHomeDir)) {
+        fs.mkdirSync(persistentHomeDir, { recursive: true });
+      }
+      defaultDir = persistentHomeDir;
+    }
+  } catch {
+    // fallback to defaultDir
+  }
+
   if (!fs.existsSync(defaultDir)) {
     fs.mkdirSync(defaultDir, { recursive: true });
   }

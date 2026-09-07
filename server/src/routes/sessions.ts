@@ -128,13 +128,21 @@ export const sessionRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /api/sessions/:id
   fastify.get<{ Params: { id: string } }>('/api/sessions/:id', async (req, reply) => {
     const { id } = req.params;
-    const hydrated = getSessionWithHistory(id);
+    let hydrated = getSessionWithHistory(id);
 
     if (!hydrated) {
-      return reply.status(404).send({
-        error: 'Not Found',
-        message: `Session ${id} not found`,
+      const created = createSession({
+        id,
+        title: 'Sesja robocza',
+        workspace_path: getDefaultWorkspaceRoot(),
+        model: 'gemini-3.8-flash-medium',
+        effort: 'medium',
       });
+      hydrated = getSessionWithHistory(id) || {
+        ...created,
+        messages: [],
+        artifacts: [],
+      };
     }
 
     return reply.status(200).send(hydrated);
@@ -186,12 +194,15 @@ export const sessionRoutes: FastifyPluginAsync = async (fastify) => {
     { bodyLimit: 30 * 1024 * 1024 },
     async (req, reply) => {
       const { id } = req.params;
-      const session = getSession(id);
+      let session = getSession(id);
 
       if (!session) {
-        return reply.status(404).send({
-          error: 'Not Found',
-          message: `Session ${id} not found`,
+        session = createSession({
+          id,
+          title: 'Sesja robocza',
+          workspace_path: getDefaultWorkspaceRoot(),
+          model: 'gemini-3.8-flash-medium',
+          effort: 'medium',
         });
       }
 
@@ -300,10 +311,7 @@ export const sessionRoutes: FastifyPluginAsync = async (fastify) => {
     const session = getSession(id);
 
     if (!session) {
-      return reply.status(404).send({
-        error: 'Not Found',
-        message: `Session ${id} not found`,
-      });
+      return reply.status(200).send({ subagents: [] });
     }
 
     const subagents = getSubagentsForSession(id);
@@ -339,12 +347,15 @@ export const sessionRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /api/sessions/:id/stream (SSE)
   fastify.get<{ Params: { id: string } }>('/api/sessions/:id/stream', async (req, reply) => {
     const { id } = req.params;
-    const session = getSession(id);
+    let session = getSession(id);
 
     if (!session) {
-      return reply.status(404).send({
-        error: 'Not Found',
-        message: `Session ${id} not found`,
+      session = createSession({
+        id,
+        title: 'Sesja robocza',
+        workspace_path: getDefaultWorkspaceRoot(),
+        model: 'gemini-3.8-flash-medium',
+        effort: 'medium',
       });
     }
 
